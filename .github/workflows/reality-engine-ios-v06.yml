@@ -5,6 +5,7 @@ on:
     branches: [reality-engine-ios-v06]
     paths:
       - 'RealityEngineV06/**'
+      - 'source_parts/**'
       - '.github/workflows/reality-engine-ios-v06.yml'
   workflow_dispatch:
 
@@ -20,18 +21,31 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p BuildSource
-          cat RealityEngineV06/source.part* > "$RUNNER_TEMP/reality.b64"
-          python3 - <<'PY'
-          import base64, pathlib, os
-          src=pathlib.Path(os.environ['RUNNER_TEMP'])/'reality.b64'
-          raw=base64.b64decode(src.read_bytes())
-          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'reality.tar.gz'
-          out.write_bytes(raw)
-          print('archive bytes', len(raw))
-          PY
-          gzip -t "$RUNNER_TEMP/reality.tar.gz"
-          tar xzf "$RUNNER_TEMP/reality.tar.gz" -C BuildSource
-          find BuildSource -maxdepth 3 -type f | head -50
+          restore_candidate() {
+            pattern="$1"
+            out="$2"
+            cat $pattern > "$RUNNER_TEMP/candidate.b64"
+            python3 - <<'PY'
+import base64, pathlib, os
+src=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate.b64'
+out=pathlib.Path(os.environ['RUNNER_TEMP'])/os.environ['OUT_NAME']
+raw=base64.b64decode(src.read_bytes())
+out.write_bytes(raw)
+print('decoded', len(raw), 'bytes to', out)
+PY
+          }
+          export OUT_NAME='reality-a.tar.gz'
+          restore_candidate 'source_parts/p-*' "$RUNNER_TEMP/reality-a.tar.gz"
+          if gzip -t "$RUNNER_TEMP/reality-a.tar.gz"; then
+            ARCHIVE="$RUNNER_TEMP/reality-a.tar.gz"
+          else
+            export OUT_NAME='reality-b.tar.gz'
+            restore_candidate 'RealityEngineV06/source.part*' "$RUNNER_TEMP/reality-b.tar.gz"
+            gzip -t "$RUNNER_TEMP/reality-b.tar.gz"
+            ARCHIVE="$RUNNER_TEMP/reality-b.tar.gz"
+          fi
+          tar xzf "$ARCHIVE" -C BuildSource
+          find BuildSource -maxdepth 3 -type f | head -80
           test -n "$(find BuildSource -name '*.xcodeproj' -type d | head -1)"
 
       - name: Xcode info
