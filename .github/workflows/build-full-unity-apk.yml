@@ -1,0 +1,165 @@
+name: NEXA XR OS 23 FULL Unity APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'unity_source_b64_v3/**'
+      - 'ci-trigger/full-unity.txt'
+      - '.github/workflows/build-full-unity-apk.yml'
+
+permissions:
+  contents: read
+
+env:
+  UNITY_VERSION: '6000.2.15f1'
+  VERSION: '23.0.0'
+  ANDROID_VERSION_CODE: '230000'
+  BUILD_PATH: 'build/Android'
+  BUILD_FILE: 'NEXA-XR-OS-23.0.0.apk'
+  SOURCE_B64_SHA256: '3ece541713620ebf2977ef8f9624dd44612a2e291aeafa8ba75c64a625a21be9'
+  SOURCE_TAR_SHA256: '3d74abf98f11820b198dabc38e8ae63ccc9a27d2690f0aea1f015bf596945f30'
+  HAND_MODEL_SHA256: 'fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1'
+  HAND_MODEL_BYTES: '7819105'
+  WINLATOR_SHA256: '80bdea17d8497a2ae0ff637e68d82a884ccc5ca4406880950b96fd2483e50970'
+
+jobs:
+  build-full:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Require Unity activation
+        env:
+          U_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          U_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          U_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          U_SERIAL: ${{ secrets.UNITY_SERIAL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$U_LICENSE" ] && [ -z "$U_SERIAL" ]; then
+            echo 'Unity license is not configured for this repository.'
+            exit 90
+          fi
+          if [ -z "$U_EMAIL" ] || [ -z "$U_PASSWORD" ]; then
+            echo 'Unity account secrets are not configured for this repository.'
+            exit 91
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Reconstruct verified clean Unity source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d unity_source_b64_v3
+          find unity_source_b64_v3 -maxdepth 1 -type f -name 'part-*' -size +0c | sort > /tmp/parts.txt
+          test -s /tmp/parts.txt
+          while IFS= read -r f; do cat "$f"; done < /tmp/parts.txt > /tmp/nexa23-unity-clean.tar.xz.b64
+          echo "$SOURCE_B64_SHA256  /tmp/nexa23-unity-clean.tar.xz.b64" | sha256sum -c -
+          base64 -d /tmp/nexa23-unity-clean.tar.xz.b64 > /tmp/nexa23-unity-clean.tar.xz
+          echo "$SOURCE_TAR_SHA256  /tmp/nexa23-unity-clean.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/nexa23-unity-clean.tar.xz
+          test -f UnityProject/ProjectSettings/ProjectVersion.txt
+          grep -q "$UNITY_VERSION" UnityProject/ProjectSettings/ProjectVersion.txt
+
+      - name: Enforce no SUPERHOT
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RniE 'SUPERHOT|Superhot|superhot' UnityProject; then
+            echo 'Forbidden SUPERHOT reference detected.'
+            exit 20
+          fi
+
+      - name: Hydrate MediaPipe hand tracking model
+        shell: bash
+        run: |
+          set -euo pipefail
+          MODEL=/tmp/hand_landmarker.task
+          curl -fL --retry 4 --retry-delay 2 \
+            'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task' \
+            -o "$MODEL"
+          test "$(stat -c%s "$MODEL")" = "$HAND_MODEL_BYTES"
+          echo "$HAND_MODEL_SHA256  $MODEL" | sha256sum -c -
+          ASSET_DIR='UnityProject/Assets/Plugins/Android/NexaBridge.androidlib/src/main/assets'
+          mkdir -p "$ASSET_DIR"
+          cp "$MODEL" "$ASSET_DIR/hand_landmarker.task"
+          cp "$MODEL" "$ASSET_DIR/hand_landmarker_enjoy.task"
+          cp "$MODEL" "$ASSET_DIR/hand_landmarker_5r.task"
+
+      - name: Hydrate verified Box64 Android host
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y zstd
+          URL='https://github.com/brunodev85/winlator/releases/download/v11.1.0/Winlator_11.1.apk'
+          curl -fL --retry 4 --retry-delay 2 "$URL" -o /tmp/Winlator_11.1.apk
+          echo "$WINLATOR_SHA256  /tmp/Winlator_11.1.apk" | sha256sum -c -
+          OUT='UnityProject/Assets/Plugins/Android/NexaBridge.androidlib/src/main/jniLibs/arm64-v8a/libbox64.so'
+          mkdir -p "$(dirname "$OUT")"
+          python3 Platform/RuntimePack/tools/import_box64_android_host.py \
+            /tmp/Winlator_11.1.apk "$OUT" \
+            --apk-sha256 "$WINLATOR_SHA256" \
+            --provenance Platform/RuntimePack/BOX64_ANDROID_HOST_PROVENANCE.json
+          test -s "$OUT"
+
+      - name: Static preflight and integration gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ci/preflight.py UnityProject
+          test -f UnityProject/Assets/Nexa/Library/NexaLibraryService.cs
+          test -f UnityProject/Assets/Nexa/Library/NexaContentLaunchService.cs
+          grep -Rqs 'com.minevr.bridge' UnityProject/Assets/Nexa UnityProject/Assets/Plugins/Android
+          grep -Rqs 'com.minevr.bridge.START' UnityProject/Assets/Nexa
+          grep -Rqs 'com.roblox.client' UnityProject/Assets/Nexa UnityProject/Assets/Plugins/Android
+          test -s UnityProject/Assets/Plugins/Android/NexaBridge.androidlib/src/main/jniLibs/arm64-v8a/libbox64.so
+
+      - name: Build full Android APK with Unity 6
+        uses: game-ci/unity-builder@v5.0.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          VERSION: ${{ env.VERSION }}
+          ANDROID_VERSION_CODE: ${{ env.ANDROID_VERSION_CODE }}
+          BUILD_PATH: ${{ env.BUILD_PATH }}
+          BUILD_FILE: ${{ env.BUILD_FILE }}
+        with:
+          projectPath: UnityProject
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: Android
+          buildMethod: Nexa.Editor.CI.NexaCiBuild.BuildAndroid
+          androidExportType: androidPackage
+          allowDirtyBuild: true
+          versioning: None
+
+      - name: Verify full APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          EXPECTED="UnityProject/${BUILD_PATH}/${BUILD_FILE}"
+          if [ -s "$EXPECTED" ]; then
+            APK="$EXPECTED"
+          else
+            APK="$(find UnityProject -type f -name '*.apk' -size +1M -print0 | xargs -0 -r ls -S | head -1)"
+          fi
+          test -n "${APK:-}"
+          test -s "$APK"
+          cp "$APK" "out/$BUILD_FILE"
+          sha256sum "out/$BUILD_FILE" | tee "out/$BUILD_FILE.sha256"
+          ls -lh "out/$BUILD_FILE"
+
+      - name: Upload full NEXA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NEXA-XR-OS-23.0.0-FULL-APK
+          path: out/*
+          if-no-files-found: error
+          retention-days: 14
