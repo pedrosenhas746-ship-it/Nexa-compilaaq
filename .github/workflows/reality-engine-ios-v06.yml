@@ -23,12 +23,12 @@ jobs:
           set -euxo pipefail
           mkdir -p BuildSource
           cat source_parts/p-* > "$RUNNER_TEMP/a.b64"
-          python3 -c "import base64,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); (p/'a.tar.gz').write_bytes(base64.b64decode((p/'a.b64').read_bytes()))"
+          python3 -c "import base64,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); s=(p/'a.b64').read_bytes().strip(); s+=b'='*((4-len(s)%4)%4); (p/'a.tar.gz').write_bytes(base64.b64decode(s))"
           if gzip -t "$RUNNER_TEMP/a.tar.gz"; then
             cp "$RUNNER_TEMP/a.tar.gz" "$RUNNER_TEMP/reality.tar.gz"
           else
             cat RealityEngineV06/source.part* > "$RUNNER_TEMP/b.b64"
-            python3 -c "import base64,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); (p/'b.tar.gz').write_bytes(base64.b64decode((p/'b.b64').read_bytes()))"
+            python3 -c "import base64,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); s=(p/'b.b64').read_bytes().strip(); s+=b'='*((4-len(s)%4)%4); (p/'b.tar.gz').write_bytes(base64.b64decode(s))"
             gzip -t "$RUNNER_TEMP/b.tar.gz"
             cp "$RUNNER_TEMP/b.tar.gz" "$RUNNER_TEMP/reality.tar.gz"
           fi
