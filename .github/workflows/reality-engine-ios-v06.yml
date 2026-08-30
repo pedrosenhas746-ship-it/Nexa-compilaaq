@@ -2,7 +2,8 @@ name: Reality Engine iOS v0.6
 
 on:
   push:
-    branches: [reality-engine-ios-v06]
+    branches:
+      - reality-engine-ios-v06
     paths:
       - 'RealityEngineV06/**'
       - 'source_parts/**'
@@ -21,30 +22,17 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p BuildSource
-          restore_candidate() {
-            pattern="$1"
-            out="$2"
-            cat $pattern > "$RUNNER_TEMP/candidate.b64"
-            python3 - <<'PY'
-import base64, pathlib, os
-src=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate.b64'
-out=pathlib.Path(os.environ['RUNNER_TEMP'])/os.environ['OUT_NAME']
-raw=base64.b64decode(src.read_bytes())
-out.write_bytes(raw)
-print('decoded', len(raw), 'bytes to', out)
-PY
-          }
-          export OUT_NAME='reality-a.tar.gz'
-          restore_candidate 'source_parts/p-*' "$RUNNER_TEMP/reality-a.tar.gz"
-          if gzip -t "$RUNNER_TEMP/reality-a.tar.gz"; then
-            ARCHIVE="$RUNNER_TEMP/reality-a.tar.gz"
+          cat source_parts/p-* > "$RUNNER_TEMP/a.b64"
+          python3 -c "import base64,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); (p/'a.tar.gz').write_bytes(base64.b64decode((p/'a.b64').read_bytes()))"
+          if gzip -t "$RUNNER_TEMP/a.tar.gz"; then
+            cp "$RUNNER_TEMP/a.tar.gz" "$RUNNER_TEMP/reality.tar.gz"
           else
-            export OUT_NAME='reality-b.tar.gz'
-            restore_candidate 'RealityEngineV06/source.part*' "$RUNNER_TEMP/reality-b.tar.gz"
-            gzip -t "$RUNNER_TEMP/reality-b.tar.gz"
-            ARCHIVE="$RUNNER_TEMP/reality-b.tar.gz"
+            cat RealityEngineV06/source.part* > "$RUNNER_TEMP/b.b64"
+            python3 -c "import base64,pathlib,os; p=pathlib.Path(os.environ['RUNNER_TEMP']); (p/'b.tar.gz').write_bytes(base64.b64decode((p/'b.b64').read_bytes()))"
+            gzip -t "$RUNNER_TEMP/b.tar.gz"
+            cp "$RUNNER_TEMP/b.tar.gz" "$RUNNER_TEMP/reality.tar.gz"
           fi
-          tar xzf "$ARCHIVE" -C BuildSource
+          tar xzf "$RUNNER_TEMP/reality.tar.gz" -C BuildSource
           find BuildSource -maxdepth 3 -type f | head -80
           test -n "$(find BuildSource -name '*.xcodeproj' -type d | head -1)"
 
@@ -58,16 +46,7 @@ PY
         run: |
           set -euxo pipefail
           PROJECT=$(find BuildSource -name 'RealityEngineIOS.xcodeproj' -type d | head -1)
-          test -n "$PROJECT"
-          xcodebuild \
-            -project "$PROJECT" \
-            -scheme RealityEngineIOS \
-            -configuration Release \
-            -sdk iphoneos \
-            -derivedDataPath "$RUNNER_TEMP/RealityDerived" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build | tee device-build.log
+          xcodebuild -project "$PROJECT" -scheme RealityEngineIOS -configuration Release -sdk iphoneos -derivedDataPath "$RUNNER_TEMP/RealityDerived" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build | tee device-build.log
 
       - name: Add 4K PBR surface pack
         shell: bash
@@ -75,21 +54,19 @@ PY
           set -euxo pipefail
           APP=$(find "$RUNNER_TEMP/RealityDerived/Build/Products" -name 'RealityEngineIOS.app' -type d | head -1)
           test -n "$APP"
-          UA='RealityEngineIOS/0.6 GitHubActions'
-          dl(){ curl -fL --retry 3 --retry-delay 2 -A "$UA" "$1" -o "$APP/$2"; }
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/asphalt_01/asphalt_01_diff_4k.jpg' 'ph_asphalt_diff_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/asphalt_01/asphalt_01_nor_gl_4k.jpg' 'ph_asphalt_nor_gl_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/asphalt_01/asphalt_01_rough_4k.jpg' 'ph_asphalt_rough_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/concrete/concrete_diff_4k.jpg' 'ph_concrete_diff_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/concrete/concrete_nor_gl_4k.jpg' 'ph_concrete_nor_gl_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/concrete/concrete_rough_4k.jpg' 'ph_concrete_rough_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sand_03/sand_03_diff_4k.jpg' 'ph_sand_diff_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sand_03/sand_03_nor_gl_4k.jpg' 'ph_sand_nor_gl_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sand_03/sand_03_rough_4k.jpg' 'ph_sand_rough_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sparse_grass/sparse_grass_diff_4k.jpg' 'ph_grass_diff_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sparse_grass/sparse_grass_nor_gl_4k.jpg' 'ph_grass_nor_gl_4k.jpg'
-          dl 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sparse_grass/sparse_grass_rough_4k.jpg' 'ph_grass_rough_4k.jpg'
-          printf '%s\n' 'Poly Haven CC0 PBR pack: asphalt_01, concrete, sand_03, sparse_grass' > "$APP/PBR_LICENSE.txt"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/asphalt_01/asphalt_01_diff_4k.jpg' -o "$APP/ph_asphalt_diff_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/asphalt_01/asphalt_01_nor_gl_4k.jpg' -o "$APP/ph_asphalt_nor_gl_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/asphalt_01/asphalt_01_rough_4k.jpg' -o "$APP/ph_asphalt_rough_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/concrete/concrete_diff_4k.jpg' -o "$APP/ph_concrete_diff_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/concrete/concrete_nor_gl_4k.jpg' -o "$APP/ph_concrete_nor_gl_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/concrete/concrete_rough_4k.jpg' -o "$APP/ph_concrete_rough_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sand_03/sand_03_diff_4k.jpg' -o "$APP/ph_sand_diff_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sand_03/sand_03_nor_gl_4k.jpg' -o "$APP/ph_sand_nor_gl_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sand_03/sand_03_rough_4k.jpg' -o "$APP/ph_sand_rough_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sparse_grass/sparse_grass_diff_4k.jpg' -o "$APP/ph_grass_diff_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sparse_grass/sparse_grass_nor_gl_4k.jpg' -o "$APP/ph_grass_nor_gl_4k.jpg"
+          curl -fL --retry 3 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/4k/sparse_grass/sparse_grass_rough_4k.jpg' -o "$APP/ph_grass_rough_4k.jpg"
+          echo 'Poly Haven CC0 PBR pack' > "$APP/PBR_LICENSE.txt"
           du -sh "$APP"
 
       - name: Package IPA
