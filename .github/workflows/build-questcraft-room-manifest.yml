@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: QuestCraftPlusPlus/QCXR-XR-Wrapper
-          ref: CardboardCraft
+          ref: a8d46ea0db48d31015c1794bf5159a7b9c6edb4d
           path: upstream/qcxr
           fetch-depth: 1
 
@@ -51,7 +51,7 @@ jobs:
             upstream/qcxr \
             out/room/nexa-room.json
 
-      - name: Verify original launcher anchors
+      - name: Verify original launcher anchors and hierarchy
         run: |
           set -euo pipefail
           grep -Fq 'Play Button' out/room/nexa-room.json
@@ -60,11 +60,23 @@ jobs:
           python3 - <<'PY'
           import json
           p=json.load(open('out/room/nexa-room.json'))
+          assert p['format'] == 'nexa-questcraft-room-v2'
+          assert p['source']['commit'] == 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
           assert p['qcworld']['position'] == {'x': -18.58, 'y': -125.09, 'z': 1.0}
+          assert p['qcworld']['parent_instance_id'] is None
           assert len(p['props']) == 7
           assert len(p['qcworld_materials']) == 128
           assert any(o['name']=='Play Button' for o in p['main_menu'])
-          print('Native lodge spec verified:', len(p['main_menu']), 'menu objects,', len(p['qcworld_materials']), 'materials')
+
+          by_source={x['source']['path']: x for x in p['props']}
+          qc_id=p['qcworld']['scene_instance_id']
+          crt=by_source['Assets/WinterLodge/Reality Display/Crt Body.obj']
+          display=by_source['Assets/WinterLodge/Reality Display/Display.obj']
+          assert display['parent_instance_id'] == crt['scene_instance_id']
+          for path,item in by_source.items():
+              if path != 'Assets/WinterLodge/Reality Display/Display.obj':
+                  assert item['parent_instance_id'] == qc_id, (path, item['parent_instance_id'], qc_id)
+          print('Native lodge spec verified:', len(p['main_menu']), 'menu objects,', len(p['qcworld_materials']), 'materials, hierarchy OK')
           PY
           cat out/room/report.txt
 
