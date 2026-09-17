@@ -3,9 +3,11 @@ name: Build QuestCraft Nexa Vivecraft
 on:
   workflow_dispatch:
   push:
-    branches: [ questcraft-nexa-phase12-build ]
+    branches:
+      - questcraft-nexa-phase12-build
     paths:
       - 'questcraft_nexa/vivecraft_phase12_overlay.tar.gz'
+      - 'questcraft_nexa/patch_vivecraft.py'
       - '.github/workflows/build-questcraft-nexa-vivecraft.yml'
 
 permissions:
@@ -13,113 +15,42 @@ permissions:
 
 jobs:
   build-vivecraft:
-    name: Build Nexa Vivecraft Fabric JAR
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-
     steps:
-      - name: Checkout Nexa overlay
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Checkout QuestCraft Vivecraft 1.20.4
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: QuestCraftPlusPlus/VivecraftMod
           ref: openxr-1.20.4
           path: upstream/vivecraft
           fetch-depth: 1
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Inject NexaVR provider
+      - name: Inject NexaVR
         shell: bash
         run: |
           set -euo pipefail
           rm -rf /tmp/nexa_phase12
           mkdir -p /tmp/nexa_phase12
           tar -xzf questcraft_nexa/vivecraft_phase12_overlay.tar.gz -C /tmp/nexa_phase12
-
           ROOT="$GITHUB_WORKSPACE/upstream/vivecraft"
           SRC="/tmp/nexa_phase12/vivecraft/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
           DST="$ROOT/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
           mkdir -p "$DST"
           cp -f "$SRC"/*.java "$DST/"
-
-          python3 - "$ROOT" <<'PY'
-          from pathlib import Path
-          import sys
-          root = Path(sys.argv[1])
-
-          settings = root / 'common/src/main/java/org/vivecraft/client_vr/settings/VRSettings.java'
-          s = settings.read_text(encoding='utf-8')
-          old = '''    public enum VRProvider implements OptionEnum<VRProvider> {
-        OPENVR,
-        OPENXR,
-        NULLVR
-    }'''
-          new = '''    public enum VRProvider implements OptionEnum<VRProvider> {
-        OPENVR,
-        OPENXR,
-        NULLVR,
-        NEXA
-    }'''
-          if old not in s:
-              raise SystemExit('VRSettings provider enum anchor missing')
-          s = s.replace(old, new, 1)
-          s = s.replace('public VRProvider stereoProviderPluginID = VRProvider.OPENVR;',
-                        'public VRProvider stereoProviderPluginID = VRProvider.NEXA;', 1)
-          settings.write_text(s, encoding='utf-8')
-
-          vrstate = root / 'common/src/main/java/org/vivecraft/client_vr/VRState.java'
-          v = vrstate.read_text(encoding='utf-8')
-          import_anchor = 'import org.vivecraft.client_vr.provider.nullvr.NullVR;'
-          if import_anchor not in v:
-              raise SystemExit('VRState import anchor missing')
-          v = v.replace(import_anchor, import_anchor + '\nimport org.vivecraft.client_vr.provider.nexavr.NexaVR;', 1)
-          switch_anchor = '                case OPENXR -> dh.vr = new MCOpenXR(instance, dh);\n                default -> dh.vr = new NullVR(instance, dh);'
-          if switch_anchor not in v:
-              raise SystemExit('VRState switch anchor missing')
-          v = v.replace(switch_anchor,
-                        '                case OPENXR -> dh.vr = new MCOpenXR(instance, dh);\n                case NEXA -> dh.vr = new NexaVR(instance, dh);\n                default -> dh.vr = new NullVR(instance, dh);', 1)
-          vrstate.write_text(v, encoding='utf-8')
-
-          mixin = root / 'common/src/main/java/org/vivecraft/mixin/client_vr/MinecraftVRMixin.java'
-          m = mixin.read_text(encoding='utf-8')
-          import_anchor = 'import org.vivecraft.client_vr.provider.control.VRInputAction;'
-          if import_anchor not in m:
-              raise SystemExit('MinecraftVRMixin import anchor missing')
-          m = m.replace(import_anchor, import_anchor + '\nimport org.vivecraft.client_vr.provider.nexavr.NexaLensDistortion;', 1)
-          mirror_anchor = '''            int screenWidth = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenWidth() / 2;
-            int screenHeight = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenHeight();
-            if (rendertarget != null) {'''
-          mirror_new = '''            int screenWidth = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenWidth() / 2;
-            int screenHeight = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenHeight();
-            if (NexaLensDistortion.isEnabledFor(ClientDataHolderVR.getInstance().vr) &&
-                NexaLensDistortion.blitDual(rendertarget, rendertarget1, screenWidth * 2, screenHeight)) {
-                return;
-            }
-            if (rendertarget != null) {'''
-          if mirror_anchor not in m:
-              raise SystemExit('MinecraftVRMixin DUAL mirror anchor missing')
-          m = m.replace(mirror_anchor, mirror_new, 1)
-          mixin.write_text(m, encoding='utf-8')
-          PY
-
-      - name: Preflight Vivecraft Nexa patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          ROOT="$GITHUB_WORKSPACE/upstream/vivecraft"
-          test -f "$ROOT/common/src/main/java/org/vivecraft/client_vr/provider/nexavr/NexaVR.java"
+          python3 questcraft_nexa/patch_vivecraft.py "$ROOT"
+          test -f "$DST/NexaVR.java"
           grep -Fq 'NEXA' "$ROOT/common/src/main/java/org/vivecraft/client_vr/settings/VRSettings.java"
           grep -Fq 'new NexaVR(instance, dh)' "$ROOT/common/src/main/java/org/vivecraft/client_vr/VRState.java"
           grep -Fq 'NexaLensDistortion.blitDual' "$ROOT/common/src/main/java/org/vivecraft/mixin/client_vr/MinecraftVRMixin.java"
 
-      - name: Build Fabric Vivecraft Nexa
+      - name: Build Fabric JAR
         working-directory: upstream/vivecraft
         shell: bash
         run: |
@@ -127,7 +58,7 @@ jobs:
           chmod +x ./gradlew
           ./gradlew :fabric:build --stacktrace --no-daemon --warning-mode all | tee "$GITHUB_WORKSPACE/vivecraft-build.log"
 
-      - name: Collect Vivecraft artifact
+      - name: Collect JAR
         shell: bash
         run: |
           set -euo pipefail
@@ -139,7 +70,7 @@ jobs:
           cp "$JAR" out/vivecraft/vivecraft-nexa-1.20.4-fabric.jar
           sha256sum out/vivecraft/vivecraft-nexa-1.20.4-fabric.jar > out/vivecraft/vivecraft-nexa-1.20.4-fabric.jar.sha256
 
-      - name: Upload Nexa Vivecraft JAR
+      - name: Upload JAR
         if: always()
         uses: actions/upload-artifact@v4
         with:
