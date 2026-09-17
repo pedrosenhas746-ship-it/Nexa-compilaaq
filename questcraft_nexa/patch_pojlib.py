@@ -92,11 +92,13 @@ manifest.write_text(m, encoding="utf-8")
 
 instances = root / "src/main/java/pojlib/util/json/MinecraftInstances.java"
 i = instances.read_text(encoding="utf-8")
-if 'obj.addProperty("stereoProviderPluginID", "OPENXR");' not in i:
+provider_anchor = 'obj.addProperty("stereoProviderPluginID", "OPENXR");'
+if provider_anchor not in i:
     raise SystemExit("Vivecraft provider config anchor missing")
 i = i.replace(
-    'obj.addProperty("stereoProviderPluginID", "OPENXR");',
-    'obj.addProperty("stereoProviderPluginID", "NEXA");',
+    provider_anchor,
+    'obj.addProperty("stereoProviderPluginID", "NEXA");\n'
+    '            obj.addProperty("displayMirrorMode", "DUAL");',
     1,
 )
 instances.write_text(i, encoding="utf-8")
