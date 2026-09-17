@@ -230,11 +230,15 @@ def main():
     }
     json_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # Hard checks on the printable ASCII used by the launcher.
-    for cp in range(32, 127):
-        if str(cp) not in char_map:
-            raise SystemExit(f"Missing ASCII U+{cp:04X} in {args.source.name}")
-        idx = char_map[str(cp)]["glyph_index"]
+    # Validate a minimal set used by the launcher. Some original TMP fonts
+    # intentionally omit printable ASCII such as the backtick, so requiring the
+    # entire 32..126 range would reject the unmodified QuestCraft font itself.
+    required_codepoints = [32, 48, 57, 65, 90, 97, 122]
+    for cp in required_codepoints:
+        entry = char_map.get(str(cp))
+        if entry is None:
+            raise SystemExit(f"Missing required U+{cp:04X} in {args.source.name}")
+        idx = entry["glyph_index"]
         if idx not in glyphs:
             raise SystemExit(f"Missing glyph {idx} for U+{cp:04X}")
 
