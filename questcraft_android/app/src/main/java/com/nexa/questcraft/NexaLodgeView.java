@@ -607,7 +607,7 @@ public final class NexaLodgeView extends TextureView
             int instance = tm.getInstance(displayAsset.getRoot());
             if (instance == 0) return null;
 
-            float[] world = tm.getWorldTransform(instance, null);
+            float[] world = tm.getWorldTransform(instance, (float[]) null);
             float[] inverseWorld = new float[16];
             if (!Matrix.invertM(inverseWorld, 0, world, 0)) return null;
 
