@@ -5,6 +5,7 @@ import android.content.res.AssetManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.SystemClock;
+import android.opengl.Matrix;
 import android.view.Choreographer;
 import android.view.Surface;
 import android.view.TextureView;
@@ -66,6 +67,23 @@ public final class NexaLodgeView extends TextureView
     // converted from Unity LH to Filament/ARCore RH.
     private static final float[] DEFAULT_CAMERA_ROT = {0f, -1f, 0f, 0f};
 
+    // Exact textured face from Assets/WinterLodge/Reality Display/Display.obj.
+    // UV(0,0)=bottom-right, U grows toward -X, V grows toward the slanted top edge.
+    private static final float[] DISPLAY_UV_ORIGIN = {
+            0.375f, 0.27147555f, -0.45984486f
+    };
+    private static final float[] DISPLAY_U_AXIS = {-0.75f, 0f, 0f};
+    private static final float[] DISPLAY_V_AXIS = {0f, 0.7386058f, 0.13023613f};
+    private static final int CRT_MENU_WIDTH = 1200;
+    private static final int CRT_MENU_HEIGHT = 600;
+    private static final float PINCH_DOWN = 0.46f;
+    private static final float PINCH_UP = 0.62f;
+    private static final long MENU_CLICK_DEBOUNCE_MS = 320L;
+
+    public interface MenuListener {
+        void onMenuAction(String buttonName);
+    }
+
     static {
         Gltfio.init();
     }
@@ -102,6 +120,11 @@ public final class NexaLodgeView extends TextureView
     private final List<Integer> lodgeLightEntities = new ArrayList<>();
     private FilamentAsset displayAsset;
     private Texture crtMenuTexture;
+    private JSONArray mainMenuButtons;
+    private MenuListener menuListener;
+    private boolean menuPinchLatched;
+    private long lastMenuClickMs;
+    private String hoveredMenuButton;
 
     private SwapChain swapChain;
     private boolean running;
@@ -175,10 +198,19 @@ public final class NexaLodgeView extends TextureView
         return roomLoaded;
     }
 
+    public void setMenuListener(MenuListener listener) {
+        this.menuListener = listener;
+    }
+
+    public String getHoveredMenuButton() {
+        return hoveredMenuButton;
+    }
+
     @Override
     public void doFrame(long frameTimeNanos) {
         if (!running || destroyed) return;
         updateTrackedCamera();
+        updateHandMenu();
         if (uiHelper.isReadyToRender() && swapChain != null && renderer.beginFrame(swapChain, frameTimeNanos)) {
             renderer.render(view);
             renderer.endFrame();
@@ -266,6 +298,7 @@ public final class NexaLodgeView extends TextureView
             }
 
             applyCrtMenuTexture("nexa/ui/rendered/main.png");
+            loadMenuHitboxes("nexa/ui/rendered/hitboxes.json");
             loadOriginalLights(spec);
             roomLoaded = true;
             applyCamera(cameraAnchorPos, cameraAnchorRot);
@@ -479,6 +512,197 @@ public final class NexaLodgeView extends TextureView
                 position[0], position[1], position[2],
                 position[0] + forward[0], position[1] + forward[1], position[2] + forward[2],
                 up[0], up[1], up[2]);
+    }
+
+    private void loadMenuHitboxes(String assetPath) {
+        try {
+            JSONObject root = new JSONObject(readTextAsset(assetPath));
+            JSONObject screens = root.getJSONObject("screens");
+            mainMenuButtons = screens.getJSONObject("main").getJSONArray("buttons");
+            android.util.Log.i("NexaLodge",
+                    "Loaded original QuestCraft CRT hitboxes: " + mainMenuButtons.length());
+        } catch (Throwable t) {
+            mainMenuButtons = null;
+            android.util.Log.e("NexaLodge", "Unable to load CRT hitboxes", t);
+        }
+    }
+
+    private void updateHandMenu() {
+        if (!trackingBaseValid || displayAsset == null || mainMenuButtons == null) {
+            hoveredMenuButton = null;
+            menuPinchLatched = false;
+            return;
+        }
+
+        NexaXRBridge.LocalSnapshot s = NexaXRBridge.getLocalSnapshot();
+        long now = SystemClock.uptimeMillis();
+        boolean fresh = s.trackingTimestampMs > 0
+                && now - s.trackingTimestampMs >= 0
+                && now - s.trackingTimestampMs <= TRACKING_FRESH_MS
+                && s.joints != null && s.joints.length >= 126
+                && s.pinch != null && s.pinch.length >= 8;
+        if (!fresh || s.validHands == 0) {
+            hoveredMenuButton = null;
+            menuPinchLatched = false;
+            return;
+        }
+
+        // Vivecraft/Nexa convention: RIGHT=0, LEFT=1.
+        int hand = (s.validHands & 1) != 0 ? 0 : ((s.validHands & 2) != 0 ? 1 : -1);
+        if (hand < 0) return;
+
+        float[] mcp = trackedJointToRoom(s.joints, hand, 5);
+        float[] tip = trackedJointToRoom(s.joints, hand, 8);
+        float[] direction = new float[]{
+                tip[0] - mcp[0],
+                tip[1] - mcp[1],
+                tip[2] - mcp[2]
+        };
+        if (!normalize3(direction)) {
+            hoveredMenuButton = null;
+            return;
+        }
+
+        float[] uv = intersectDisplayUv(tip, direction);
+        String button = uv == null ? null : findMenuButton(
+                uv[0] * CRT_MENU_WIDTH,
+                (1.0f - uv[1]) * CRT_MENU_HEIGHT);
+        hoveredMenuButton = button;
+
+        float pinch = s.pinch[hand * 4];
+        if (menuPinchLatched) {
+            if (pinch >= PINCH_UP) menuPinchLatched = false;
+            return;
+        }
+
+        if (button != null
+                && pinch <= PINCH_DOWN
+                && now - lastMenuClickMs >= MENU_CLICK_DEBOUNCE_MS) {
+            menuPinchLatched = true;
+            lastMenuClickMs = now;
+            MenuListener listener = menuListener;
+            if (listener != null) post(() -> listener.onMenuAction(button));
+        }
+    }
+
+    private float[] trackedJointToRoom(float[] joints, int hand, int joint) {
+        int k = hand * 63 + joint * 3;
+        float[] delta = new float[]{
+                joints[k] - baseHeadPos[0],
+                joints[k + 1] - baseHeadPos[1],
+                joints[k + 2] - baseHeadPos[2]
+        };
+        float[] local = rotate(inverse(baseHeadRot), delta);
+        float[] room = rotate(cameraAnchorRot, local);
+        return new float[]{
+                cameraAnchorPos[0] + room[0],
+                cameraAnchorPos[1] + room[1],
+                cameraAnchorPos[2] + room[2]
+        };
+    }
+
+    private float[] intersectDisplayUv(float[] rayOriginWorld, float[] rayDirectionWorld) {
+        try {
+            TransformManager tm = engine.getTransformManager();
+            int instance = tm.getInstance(displayAsset.getRoot());
+            if (instance == 0) return null;
+
+            float[] world = tm.getWorldTransform(instance, null);
+            float[] inverseWorld = new float[16];
+            if (!Matrix.invertM(inverseWorld, 0, world, 0)) return null;
+
+            float[] o4 = {rayOriginWorld[0], rayOriginWorld[1], rayOriginWorld[2], 1f};
+            float[] e4 = {
+                    rayOriginWorld[0] + rayDirectionWorld[0],
+                    rayOriginWorld[1] + rayDirectionWorld[1],
+                    rayOriginWorld[2] + rayDirectionWorld[2],
+                    1f
+            };
+            float[] lo4 = new float[4];
+            float[] le4 = new float[4];
+            Matrix.multiplyMV(lo4, 0, inverseWorld, 0, o4, 0);
+            Matrix.multiplyMV(le4, 0, inverseWorld, 0, e4, 0);
+
+            float[] o = {lo4[0], lo4[1], lo4[2]};
+            float[] d = {le4[0] - lo4[0], le4[1] - lo4[1], le4[2] - lo4[2]};
+            if (!normalize3(d)) return null;
+
+            float[] normal = cross(DISPLAY_U_AXIS, DISPLAY_V_AXIS);
+            if (!normalize3(normal)) return null;
+            float denom = dot(normal, d);
+            if (Math.abs(denom) < 1e-5f) return null;
+
+            float[] toPlane = {
+                    DISPLAY_UV_ORIGIN[0] - o[0],
+                    DISPLAY_UV_ORIGIN[1] - o[1],
+                    DISPLAY_UV_ORIGIN[2] - o[2]
+            };
+            float t = dot(normal, toPlane) / denom;
+            if (t < 0f || t > 4.0f) return null;
+
+            float[] hit = {
+                    o[0] + d[0] * t,
+                    o[1] + d[1] * t,
+                    o[2] + d[2] * t
+            };
+            float[] rel = {
+                    hit[0] - DISPLAY_UV_ORIGIN[0],
+                    hit[1] - DISPLAY_UV_ORIGIN[1],
+                    hit[2] - DISPLAY_UV_ORIGIN[2]
+            };
+
+            float uu = dot(DISPLAY_U_AXIS, DISPLAY_U_AXIS);
+            float vv = dot(DISPLAY_V_AXIS, DISPLAY_V_AXIS);
+            float u = dot(rel, DISPLAY_U_AXIS) / uu;
+            float v = dot(rel, DISPLAY_V_AXIS) / vv;
+            if (u < -0.04f || u > 1.04f || v < -0.04f || v > 1.04f) return null;
+            return new float[]{clamp01(u), clamp01(v)};
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private String findMenuButton(float px, float py) {
+        try {
+            for (int i = 0; i < mainMenuButtons.length(); i++) {
+                JSONObject b = mainMenuButtons.getJSONObject(i);
+                JSONArray r = b.getJSONArray("rect");
+                float left = (float) r.getDouble(0);
+                float top = (float) r.getDouble(1);
+                float right = (float) r.getDouble(2);
+                float bottom = (float) r.getDouble(3);
+                if (px >= left && px <= right && py >= top && py <= bottom) {
+                    return b.optString("name", null);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static float dot(float[] a, float[] b) {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    }
+
+    private static float[] cross(float[] a, float[] b) {
+        return new float[]{
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0]
+        };
+    }
+
+    private static boolean normalize3(float[] v) {
+        float d = (float) Math.sqrt(dot(v, v));
+        if (d < 1e-6f) return false;
+        v[0] /= d;
+        v[1] /= d;
+        v[2] /= d;
+        return true;
+    }
+
+    private static float clamp01(float v) {
+        return Math.max(0f, Math.min(1f, v));
     }
 
     private static float[] unityTrsToFilament(JSONObject item) {
