@@ -16,6 +16,7 @@ permissions:
 
 env:
   VIVECRAFT_ARTIFACT_ID: '10516311970'
+  QCXR_ROOM_COMMIT: 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
 
 jobs:
   build:
@@ -78,11 +79,11 @@ jobs:
           lfs: true
           fetch-depth: 1
 
-      - name: Checkout original QuestCraft lodge source
+      - name: Checkout pinned original QuestCraft lodge source
         uses: actions/checkout@v4
         with:
           repository: QuestCraftPlusPlus/QCXR-XR-Wrapper
-          ref: CardboardCraft
+          ref: ${{ env.QCXR_ROOM_COMMIT }}
           path: upstream/qcxr-room
           fetch-depth: 1
 
@@ -100,8 +101,25 @@ jobs:
           python3 questcraft_nexa/room_converter/build_native_room_spec.py \
             out/room/main-scene.json upstream/qcxr-room \
             questcraft_android/app/src/main/assets/nexa/nexa-room.json
-          grep -Fq 'Assets/QCWorld/QCWorld.obj' questcraft_android/app/src/main/assets/nexa/nexa-room.json
-          grep -Fq 'Play Button' questcraft_android/app/src/main/assets/nexa/nexa-room.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('questcraft_android/app/src/main/assets/nexa/nexa-room.json'))
+          assert p['format'] == 'nexa-questcraft-room-v2'
+          assert p['source']['commit'] == 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
+          assert p['qcworld']['position'] == {'x': -18.58, 'y': -125.09, 'z': 1.0}
+          assert len(p['props']) == 7
+          assert len(p['qcworld_materials']) == 128
+          assert any(o['name']=='Play Button' for o in p['main_menu'])
+          by_source={x['source']['path']:x for x in p['props']}
+          qc_id=p['qcworld']['scene_instance_id']
+          crt=by_source['Assets/WinterLodge/Reality Display/Crt Body.obj']
+          display=by_source['Assets/WinterLodge/Reality Display/Display.obj']
+          assert display['parent_instance_id'] == crt['scene_instance_id']
+          for path,item in by_source.items():
+              if path != 'Assets/WinterLodge/Reality Display/Display.obj':
+                  assert item['parent_instance_id'] == qc_id, (path,item['parent_instance_id'],qc_id)
+          print('QuestCraft lodge metadata hierarchy verified for Android build')
+          PY
 
       - name: Patch and build native Pojlib AAR
         shell: bash
