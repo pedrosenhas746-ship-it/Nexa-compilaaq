@@ -11,9 +11,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   NEXAQUEST_APK: Build/NexaQuest-Phase12.apk
+  VIVECRAFT_ARTIFACT_ID: '10516311970'
 
 jobs:
   build-apk:
@@ -29,35 +31,22 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Checkout Vivecraft 1.20.4
-        uses: actions/checkout@v4
-        with:
-          repository: QuestCraftPlusPlus/VivecraftMod
-          ref: openxr-1.20.4
-          path: upstream/vivecraft
-          fetch-depth: 1
-
-      - name: Build Nexa Vivecraft JAR
+      - name: Download validated Nexa Vivecraft JAR
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/nexa_phase12
-          mkdir -p /tmp/nexa_phase12
-          tar -xzf questcraft_nexa/vivecraft_phase12_overlay.tar.gz -C /tmp/nexa_phase12
-          ROOT="$GITHUB_WORKSPACE/upstream/vivecraft"
-          SRC="/tmp/nexa_phase12/vivecraft/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
-          DST="$ROOT/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
-          mkdir -p "$DST"
-          cp -f "$SRC"/*.java "$DST/"
-          python3 questcraft_nexa/patch_vivecraft.py "$ROOT"
-          cd "$ROOT"
-          chmod +x ./gradlew
-          ./gradlew :fabric:build --stacktrace --no-daemon
-          cd "$GITHUB_WORKSPACE"
-          JAR="$(find upstream/vivecraft/fabric/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*dev*' ! -name '*shadow*' -print -quit)"
+          mkdir -p /tmp/vivecraft-artifact out/intermediate
+          curl -fL --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${VIVECRAFT_ARTIFACT_ID}/zip" \
+            -o /tmp/vivecraft.zip
+          unzip -q /tmp/vivecraft.zip -d /tmp/vivecraft-artifact
+          JAR="$(find /tmp/vivecraft-artifact -type f -name 'vivecraft-nexa-1.20.4-fabric.jar' -print -quit)"
           test -n "$JAR"
           test -s "$JAR"
-          mkdir -p out/intermediate
           cp "$JAR" out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
           sha256sum out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
 
