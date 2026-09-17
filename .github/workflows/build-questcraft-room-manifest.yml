@@ -43,12 +43,29 @@ jobs:
             out/room/main-scene.json \
             --report out/room/report.txt
 
+      - name: Generate Android-native room spec
+        run: |
+          set -euo pipefail
+          python3 questcraft_nexa/room_converter/build_native_room_spec.py \
+            out/room/main-scene.json \
+            upstream/qcxr \
+            out/room/nexa-room.json
+
       - name: Verify original launcher anchors
         run: |
           set -euo pipefail
-          grep -Fq 'Play Button' out/room/main-scene.json
-          grep -Fq 'Assets/WinterLodge/' out/room/main-scene.json
-          echo 'Original Main.unity anchors found.'
+          grep -Fq 'Play Button' out/room/nexa-room.json
+          grep -Fq 'Assets/QCWorld/QCWorld.obj' out/room/nexa-room.json
+          grep -Fq 'Assets/WinterLodge/Bear/Bear.fbx' out/room/nexa-room.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('out/room/nexa-room.json'))
+          assert p['qcworld']['position'] == {'x': -18.58, 'y': -125.09, 'z': 1.0}
+          assert len(p['props']) == 7
+          assert len(p['qcworld_materials']) == 128
+          assert any(o['name']=='Play Button' for o in p['main_menu'])
+          print('Native lodge spec verified:', len(p['main_menu']), 'menu objects,', len(p['qcworld_materials']), 'materials')
+          PY
           cat out/room/report.txt
 
       - name: Upload room manifest
