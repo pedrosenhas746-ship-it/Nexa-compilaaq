@@ -52,6 +52,9 @@ public final class NexaLodgeView extends TextureView
 
     private static final long TRACKING_FRESH_MS = 250L;
     private static final long RECENTER_AFTER_LOSS_MS = 1000L;
+    // Unity Built-in point-light intensity is unitless while Filament expects lumens.
+    // Preserve the original Unity value in room JSON and apply one explicit calibration scale here.
+    private static final float UNITY_POINT_LUMEN_SCALE = 400.0f;
     private static final float[] DEFAULT_CAMERA_POS = {-2.157f, -1.028f, 0.084f};
     // Original scene: XR Origin Y+90 degrees * Main Camera Y+90 degrees,
     // converted from Unity LH to Filament/ARCore RH.
@@ -90,6 +93,7 @@ public final class NexaLodgeView extends TextureView
     private final AssetLoader assetLoader;
     private final ResourceLoader resourceLoader;
     private final List<FilamentAsset> loadedAssets = new ArrayList<>();
+    private final List<Integer> lodgeLightEntities = new ArrayList<>();
 
     private SwapChain swapChain;
     private boolean running;
@@ -124,7 +128,7 @@ public final class NexaLodgeView extends TextureView
         lightEntity = EntityManager.get().create();
         new LightManager.Builder(LightManager.Type.DIRECTIONAL)
                 .color(1.0f, 0.94f, 0.84f)
-                .intensity(85_000.0f)
+                .intensity(6_000.0f)
                 .direction(-0.35f, -0.82f, -0.45f)
                 .castShadows(true)
                 .build(engine, lightEntity);
@@ -248,11 +252,43 @@ public final class NexaLodgeView extends TextureView
                 tm.commitLocalTransformTransaction();
             }
 
+            loadOriginalLights(spec);
             roomLoaded = true;
             applyCamera(cameraAnchorPos, cameraAnchorRot);
         } catch (Throwable t) {
             android.util.Log.e("NexaLodge", "Unable to load original QuestCraft lodge", t);
         }
+    }
+
+    private void loadOriginalLights(JSONObject spec) throws Exception {
+        JSONArray lights = spec.optJSONArray("lights");
+        if (lights == null) return;
+        for (int i = 0; i < lights.length(); i++) {
+            JSONObject light = lights.getJSONObject(i);
+            if (!light.optBoolean("active", true)) continue;
+            // Unity LightType.Point == 2. Other types can be added later without
+            // guessing their photometric conversion.
+            if (light.optInt("type", -1) != 2) continue;
+            JSONObject p = light.getJSONObject("position");
+            JSONObject c = light.getJSONObject("color");
+            float unityIntensity = (float) light.optDouble("intensity_unity", 1.0);
+            float range = Math.max(0.1f, (float) light.optDouble("range", 10.0));
+            int entity = EntityManager.get().create();
+            new LightManager.Builder(LightManager.Type.POINT)
+                    .color((float) c.optDouble("r", 1.0),
+                           (float) c.optDouble("g", 1.0),
+                           (float) c.optDouble("b", 1.0))
+                    .intensity(Math.max(1.0f, unityIntensity * UNITY_POINT_LUMEN_SCALE))
+                    .position((float) p.optDouble("x", 0.0),
+                              (float) p.optDouble("y", 0.0),
+                              -(float) p.optDouble("z", 0.0))
+                    .falloff(range)
+                    .castShadows(false)
+                    .build(engine, entity);
+            scene.addEntity(entity);
+            lodgeLightEntities.add(entity);
+        }
+        android.util.Log.i("NexaLodge", "Loaded original QuestCraft point lights: " + lodgeLightEntities.size());
     }
 
     private FilamentAsset loadGlb(String path) throws Exception {
@@ -496,6 +532,12 @@ public final class NexaLodgeView extends TextureView
             try { assetLoader.destroyAsset(asset); } catch (Throwable ignored) {}
         }
         loadedAssets.clear();
+        for (int entity : lodgeLightEntities) {
+            try { scene.removeEntity(entity); } catch (Throwable ignored) {}
+            try { engine.destroyEntity(entity); } catch (Throwable ignored) {}
+            try { EntityManager.get().destroy(entity); } catch (Throwable ignored) {}
+        }
+        lodgeLightEntities.clear();
         try { resourceLoader.destroy(); } catch (Throwable ignored) {}
         try { assetLoader.destroy(); } catch (Throwable ignored) {}
         try { materialProvider.destroyMaterials(); } catch (Throwable ignored) {}

@@ -127,6 +127,74 @@ def parse_mtl(path: Path):
     return materials
 
 
+
+def qmul(a, b):
+    ax, ay, az, aw = (a.get(k, 0.0) for k in "xyzw")
+    bx, by, bz, bw = (b.get(k, 0.0) for k in "xyzw")
+    return {
+        "x": aw * bx + ax * bw + ay * bz - az * by,
+        "y": aw * by - ax * bz + ay * bw + az * bx,
+        "z": aw * bz + ax * by - ay * bx + az * bw,
+        "w": aw * bw - ax * bx - ay * by - az * bz,
+    }
+
+
+def qconj(q):
+    return {"x": -q.get("x", 0.0), "y": -q.get("y", 0.0), "z": -q.get("z", 0.0), "w": q.get("w", 1.0)}
+
+
+def qrotate(q, v):
+    p = {"x": v.get("x", 0.0), "y": v.get("y", 0.0), "z": v.get("z", 0.0), "w": 0.0}
+    r = qmul(qmul(q, p), qconj(q))
+    return {"x": r["x"], "y": r["y"], "z": r["z"]}
+
+
+def world_transform(obj, by_id, cache):
+    oid = obj["id"]
+    if oid in cache:
+        return cache[oid]
+    lp = obj.get("local_position") or {"x": 0.0, "y": 0.0, "z": 0.0}
+    lq = obj.get("local_rotation") or {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0}
+    ls = obj.get("local_scale") or {"x": 1.0, "y": 1.0, "z": 1.0}
+    parent = by_id.get(obj.get("parent_id"))
+    if parent is None:
+        result = (dict(lp), dict(lq), dict(ls))
+    else:
+        pp, pq, ps = world_transform(parent, by_id, cache)
+        scaled = {k: lp.get(k, 0.0) * ps.get(k, 1.0) for k in "xyz"}
+        delta = qrotate(pq, scaled)
+        wp = {k: pp.get(k, 0.0) + delta.get(k, 0.0) for k in "xyz"}
+        wq = qmul(pq, lq)
+        ws = {k: ps.get(k, 1.0) * ls.get(k, 1.0) for k in "xyz"}
+        result = (wp, wq, ws)
+    cache[oid] = result
+    return result
+
+
+def extract_lights(objects):
+    by_id = {o["id"]: o for o in objects}
+    cache = {}
+    out = []
+    for obj in objects:
+        for component in obj.get("components", []):
+            if component.get("type_id") != 108:
+                continue
+            position, rotation, scale = world_transform(obj, by_id, cache)
+            out.append({
+                "id": obj["id"],
+                "name": obj.get("name"),
+                "active": obj.get("active", True),
+                "type": to_number(component.get("light_type")),
+                "position": position,
+                "rotation": rotation,
+                "scale": scale,
+                "color": component.get("color") or {"r": 1.0, "g": 1.0, "b": 1.0, "a": 1.0},
+                "intensity_unity": to_number(component.get("intensity")) or 1.0,
+                "range": to_number(component.get("range")) or 10.0,
+            })
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("manifest", type=Path)
@@ -162,6 +230,7 @@ def main():
         "coordinate_system": "Unity left-handed Y-up; preserve values until renderer conversion",
         "main_menu": subtree(m["objects"], "MainMenu"),
         "xr_origin": subtree(m["objects"], "XR Origin"),
+        "lights": extract_lights(m["objects"]),
         "quester_collision": subtree(m["objects"], "Quester renderer"),
         "qcworld": qcworld,
         "props": [p for p in prefabs if p is not qcworld],
@@ -178,6 +247,7 @@ def main():
     print("Native room spec:")
     print("  MainMenu objects:", len(spec["main_menu"]))
     print("  XR Origin objects:", len(spec["xr_origin"]))
+    print("  lights:", len(spec["lights"]))
     print("  QCWorld overrides:", len(qcworld["overrides_by_file_id"]))
     print("  props:", len(spec["props"]))
     print("  materials:", len(spec["qcworld_materials"]))

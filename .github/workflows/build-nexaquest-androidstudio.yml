@@ -214,7 +214,7 @@ jobs:
           unzip -l "$APK" | grep -F 'assets/nexa/licenses/QCXR-GPL-3.0.txt'
           test "$(unzip -Z1 "$APK" | grep -Ec '^assets/nexa/lodge_models/.*\.glb$')" -eq 8
           mkdir -p out/final
-          cp "$APK" out/final/NexaQuest-AndroidStudio-1.4-lodge-assets-debug.apk
+          cp "$APK" out/final/NexaQuest-AndroidStudio-1.4.2-lodge-lights-debug.apk
           sha256sum out/final/NexaQuest-AndroidStudio-1.4-lodge-assets-debug.apk | tee out/final/NexaQuest-AndroidStudio-1.4-lodge-assets-debug.apk.sha256
           ls -lh out/final/NexaQuest-AndroidStudio-1.4-lodge-assets-debug.apk
 
