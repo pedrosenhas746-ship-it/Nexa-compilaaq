@@ -26,6 +26,10 @@ old_default = "public VRProvider stereoProviderPluginID = VRProvider.OPENXR;"
 if old_default not in s:
     raise SystemExit("VRSettings default provider anchor missing")
 s = s.replace(old_default, "public VRProvider stereoProviderPluginID = VRProvider.NEXA;", 1)
+mirror_default = "public MirrorMode displayMirrorMode = MirrorMode.CROPPED;"
+if mirror_default not in s:
+    raise SystemExit("VRSettings mirror default anchor missing")
+s = s.replace(mirror_default, "public MirrorMode displayMirrorMode = MirrorMode.DUAL;", 1)
 settings.write_text(s, encoding="utf-8")
 
 vrstate = root / "common/src/main/java/org/vivecraft/client_vr/VRState.java"
