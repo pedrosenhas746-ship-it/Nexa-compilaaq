@@ -20,8 +20,7 @@
         <meta-data android:name="com.google.ar.core" android:value="optional" />
 
         <activity
-            android:name=".NexaQuestActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:name=".BootstrapActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="landscape">
@@ -30,5 +29,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".NexaQuestActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:process=":runtime"
+            android:screenOrientation="landscape" />
     </application>
 </manifest>
