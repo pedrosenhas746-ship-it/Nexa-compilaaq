@@ -12,7 +12,6 @@ import json
 from pathlib import Path
 
 ROOT_TRANSFORM_FILE_ID = -8679921383154817045
-SOURCE_COMMIT = "a8d46ea0db48d31015c1794bf5159a7b9c6edb4d"
 
 
 def children_of(objects):
@@ -200,7 +199,7 @@ def main():
     ap.add_argument("manifest", type=Path)
     ap.add_argument("qcxr_root", type=Path)
     ap.add_argument("output", type=Path)
-    args = ap.parse_args()
+    ap.add_argument("--source-commit", default="unknown")\n    ap.add_argument("--source-branch", default="master")\n    args = ap.parse_args()
 
     m = json.loads(args.manifest.read_text(encoding="utf-8"))
     raw_prefabs = []
@@ -223,8 +222,8 @@ def main():
         "format": "nexa-questcraft-room-v2",
         "source": {
             "repository": "QuestCraftPlusPlus/QCXR-XR-Wrapper",
-            "branch": "CardboardCraft",
-            "commit": SOURCE_COMMIT,
+            "branch": args.source_branch,
+            "commit": args.source_commit,
             "scene": "Assets/Scenes/Main.unity",
         },
         "coordinate_system": "Unity left-handed Y-up; preserve values until renderer conversion",
