@@ -60,21 +60,27 @@ jobs:
           lfs: true
           fetch-depth: 1
 
-      - name: Set up NDK r26b
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r26b
-          local-cache: true
-          link-to-sdk: true
-
-      - name: Install Android SDK packages
+      - name: Install Android SDK and official NDK r26b
         shell: bash
         run: |
           set -euo pipefail
           export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           export ANDROID_SDK_ROOT="$ANDROID_HOME"
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-34' 'build-tools;30.0.3' 'platform-tools'
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" \
+            'platforms;android-34' \
+            'build-tools;30.0.3' \
+            'platform-tools' \
+            'ndk;26.1.10909125'
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/26.1.10909125"
+          export NDK_HOME="$ANDROID_NDK_HOME"
+          echo "ANDROID_NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_NDK_HOME" >> "$GITHUB_ENV"
+          test -x "$ANDROID_NDK_HOME/ndk-build"
+          test -x "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          test -x "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++"
+          "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version | head -1
 
       - name: Build final Nexa Pojlib AAR
         shell: bash
