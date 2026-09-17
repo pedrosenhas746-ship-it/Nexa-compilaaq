@@ -57,6 +57,38 @@ public final class NexaXRBridge {
 
     private NexaXRBridge() {}
 
+    /** Immutable copy for the native Android lodge renderer. */
+    public static final class LocalSnapshot {
+        public final boolean headTracked;
+        public final long trackingTimestampMs;
+        public final int validHands;
+        public final float[] head;
+        public final float[] joints;
+        public final float[] pinch;
+
+        LocalSnapshot(boolean headTracked, long trackingTimestampMs, int validHands,
+                      float[] head, float[] joints, float[] pinch) {
+            this.headTracked = headTracked;
+            this.trackingTimestampMs = trackingTimestampMs;
+            this.validHands = validHands;
+            this.head = head;
+            this.joints = joints;
+            this.pinch = pinch;
+        }
+    }
+
+    public static LocalSnapshot getLocalSnapshot() {
+        synchronized (LOCK) {
+            return new LocalSnapshot(
+                    headTracked,
+                    trackingTimestampMs,
+                    validHands,
+                    HEAD.clone(),
+                    JOINTS.clone(),
+                    PINCH.clone());
+        }
+    }
+
     public static void start() {
         if (!started.compareAndSet(false, true)) return;
         try {
