@@ -14,11 +14,14 @@ from pathlib import Path
 
 BLOCK_RE = re.compile(r"(?m)^--- !u!(\d+) &(\-?\d+)(?: stripped)?\s*$")
 FILEID_RE = re.compile(r"fileID:\s*(-?\d+)")
+# Keep property/value matching on a single physical YAML line. Using \s* here
+# could cross a newline when `value:` is empty and accidentally consume the
+# objectReference of the following modification.
 OVERRIDE_RE = re.compile(
-    r"(?ms)^\s*- target:\s*\{([^}]*)\}\s*\n"
-    r"\s*propertyPath:\s*(.*?)\s*\n"
-    r"\s*value:\s*(.*?)\s*\n"
-    r"\s*objectReference:\s*\{([^}]*)\}"
+    r"(?ms)^\s*- target:[ \t]*\{([^}]*)\}[ \t]*\r?\n"
+    r"[ \t]*propertyPath:[ \t]*([^\r\n]*?)[ \t]*\r?\n"
+    r"[ \t]*value:[ \t]*([^\r\n]*)\r?\n"
+    r"[ \t]*objectReference:[ \t]*\{([^}]*)\}"
 )
 
 
