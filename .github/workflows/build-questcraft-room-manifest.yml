@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 env:
-  QCXR_ROOM_COMMIT: 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
+  QCXR_ROOM_COMMIT: 'f0343687f49be9aa9d7c867c016bee445c5e7cd8'
 
 jobs:
   extract-room:
@@ -59,7 +59,9 @@ jobs:
           python3 questcraft_nexa/room_converter/build_native_room_spec.py \
             out/room/main-scene.json \
             upstream/qcxr \
-            out/room/nexa-room.json
+            out/room/nexa-room.json \
+            --source-commit "$QCXR_ROOM_COMMIT" \
+            --source-branch master
 
       - name: Convert original lodge models to GLB
         run: |
@@ -157,7 +159,7 @@ jobs:
           import json, pathlib
           p=json.load(open('out/room/nexa-room.json'))
           assert p['format'] == 'nexa-questcraft-room-v2'
-          assert p['source']['commit'] == 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
+          assert p['source']['commit'] == os.environ['QCXR_ROOM_COMMIT']
           assert p['qcworld']['position'] == {'x': -18.58, 'y': -125.09, 'z': 1.0}
           assert p['qcworld']['parent_instance_id'] is None
           assert len(p['props']) == 7
