@@ -1,0 +1,200 @@
+name: Build Nexa QuestCraft Phase 1.2 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - questcraft-nexa-phase12-build
+    paths:
+      - 'questcraft_nexa/**'
+      - '.github/workflows/build-nexaquest-phase12-apk.yml'
+
+permissions:
+  contents: read
+
+env:
+  NEXAQUEST_APK: Build/NexaQuest-Phase12.apk
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Nexa build overlay
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Checkout Vivecraft 1.20.4
+        uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/VivecraftMod
+          ref: openxr-1.20.4
+          path: upstream/vivecraft
+          fetch-depth: 1
+
+      - name: Build Nexa Vivecraft JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/nexa_phase12
+          mkdir -p /tmp/nexa_phase12
+          tar -xzf questcraft_nexa/vivecraft_phase12_overlay.tar.gz -C /tmp/nexa_phase12
+          ROOT="$GITHUB_WORKSPACE/upstream/vivecraft"
+          SRC="/tmp/nexa_phase12/vivecraft/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
+          DST="$ROOT/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
+          mkdir -p "$DST"
+          cp -f "$SRC"/*.java "$DST/"
+          python3 questcraft_nexa/patch_vivecraft.py "$ROOT"
+          cd "$ROOT"
+          chmod +x ./gradlew
+          ./gradlew :fabric:build --stacktrace --no-daemon
+          cd "$GITHUB_WORKSPACE"
+          JAR="$(find upstream/vivecraft/fabric/build/libs -maxdepth 1 -type f -name '*.jar' ! -name '*sources*' ! -name '*dev*' ! -name '*shadow*' -print -quit)"
+          test -n "$JAR"
+          test -s "$JAR"
+          mkdir -p out/intermediate
+          cp "$JAR" out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
+          sha256sum out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
+
+      - name: Checkout Pojlib 6.0.0
+        uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/Pojlib
+          ref: QuestCraft-6.0.0
+          path: upstream/pojlib
+          submodules: recursive
+          lfs: true
+          fetch-depth: 1
+
+      - name: Set up NDK r26b
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+          local-cache: true
+          link-to-sdk: true
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-34' 'build-tools;30.0.3' 'platform-tools'
+
+      - name: Build final Nexa Pojlib AAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/upstream/pojlib"
+          cp questcraft_nexa/pojlib/NexaXRBridge.java "$ROOT/src/main/java/pojlib/NexaXRBridge.java"
+          cp questcraft_nexa/pojlib/NexaTrackingSurface.java "$ROOT/src/main/java/pojlib/NexaTrackingSurface.java"
+          cp questcraft_nexa/pojlib/NexaHandTracker.java "$ROOT/src/main/java/pojlib/NexaHandTracker.java"
+          cp questcraft_nexa/pojlib/NexaEmbeddedMods.java "$ROOT/src/main/java/pojlib/NexaEmbeddedMods.java"
+          python3 questcraft_nexa/patch_pojlib.py "$ROOT"
+
+          ASSETS="$ROOT/src/main/assets"
+          mkdir -p "$ASSETS/nexa"
+          cp out/intermediate/vivecraft-nexa-1.20.4-fabric.jar "$ASSETS/nexa/vivecraft-nexa-1.20.4-fabric.jar"
+          curl -fL --retry 4 --retry-delay 2 \
+            'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task' \
+            -o "$ASSETS/hand_landmarker.task"
+          test -s "$ASSETS/hand_landmarker.task"
+          test -s "$ASSETS/nexa/vivecraft-nexa-1.20.4-fabric.jar"
+          grep -Fq '"NEXA"' "$ROOT/src/main/java/pojlib/util/json/MinecraftInstances.java"
+          grep -Fq '"DUAL"' "$ROOT/src/main/java/pojlib/util/json/MinecraftInstances.java"
+
+          cd "$ROOT"
+          chmod +x ./gradlew
+          ./gradlew clean assembleRelease --stacktrace --no-daemon
+          cd "$GITHUB_WORKSPACE"
+          AAR="$(find upstream/pojlib/build/outputs/aar -type f -name '*release*.aar' -print -quit)"
+          test -n "$AAR"
+          test -s "$AAR"
+          cp "$AAR" out/intermediate/Pojlib-release.aar
+          unzip -l out/intermediate/Pojlib-release.aar | grep -F 'assets/nexa/vivecraft-nexa-1.20.4-fabric.jar'
+          sha256sum out/intermediate/Pojlib-release.aar
+
+      - name: Checkout QCXR wrapper
+        uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/QCXR-XR-Wrapper
+          ref: master
+          path: upstream/qcxr
+          lfs: true
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Patch QCXR for phone/Nexa runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/upstream/qcxr"
+          test -f "$ROOT/ProjectSettings/ProjectVersion.txt"
+          grep -Fq '2022.3.62f3' "$ROOT/ProjectSettings/ProjectVersion.txt"
+          cp out/intermediate/Pojlib-release.aar "$ROOT/Assets/Plugins/Android/Pojlib-release.aar"
+          python3 questcraft_nexa/patch_qcxr.py "$ROOT"
+          mkdir -p "$ROOT/Assets/Editor"
+          cp questcraft_nexa/NexaQuestCiBuild.cs "$ROOT/Assets/Editor/NexaQuestCiBuild.cs"
+          grep -Fq 'com.google.ar:core:1.45.0' "$ROOT/Assets/Plugins/Android/mainTemplate.gradle"
+          grep -Fq 'android.permission.CAMERA' "$ROOT/Assets/Plugins/Android/AndroidManifest.xml"
+          if grep -Fq 'android.hardware.vr.headtracking' "$ROOT/Assets/Plugins/Android/AndroidManifest.xml"; then
+            echo 'VR headset requirement still present in manifest'
+            exit 31
+          fi
+          if grep -Fq 'org.khronos.openxr.permission.OPENXR_SYSTEM' "$ROOT/Assets/Plugins/Android/AndroidManifest.xml"; then
+            echo 'OpenXR permission still present in manifest'
+            exit 32
+          fi
+          grep -Fq '"NEXA_PHONE"' "$ROOT/Assets/Scripts/JNIStorage.cs"
+
+      - name: Build Android APK with Unity 2022.3.62f3
+        uses: game-ci/unity-builder@v5.0.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          NEXAQUEST_APK: ${{ env.NEXAQUEST_APK }}
+        with:
+          projectPath: upstream/qcxr
+          unityVersion: 2022.3.62f3
+          targetPlatform: Android
+          buildMethod: Nexa.Editor.CI.NexaQuestCiBuild.BuildAndroid
+          androidExportType: androidPackage
+          allowDirtyBuild: true
+          versioning: None
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="upstream/qcxr/$NEXAQUEST_APK"
+          if [ -s "$EXPECTED" ]; then
+            APK="$EXPECTED"
+          else
+            APK="$(find upstream/qcxr -type f -name '*.apk' -size +1M -print | head -1)"
+          fi
+          test -n "${APK:-}"
+          test -s "$APK"
+          mkdir -p out/final
+          cp "$APK" out/final/NexaQuest-Phase1.2.apk
+          sha256sum out/final/NexaQuest-Phase1.2.apk | tee out/final/NexaQuest-Phase1.2.apk.sha256
+          ls -lh out/final/NexaQuest-Phase1.2.apk
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexaQuest-Phase1.2-APK
+          path: |
+            out/final/**
+            out/intermediate/*.aar
+            out/intermediate/*.jar
+          if-no-files-found: warn
+          retention-days: 14
