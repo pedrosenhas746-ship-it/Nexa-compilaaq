@@ -62,7 +62,7 @@ def to_number(value):
             return value
 
 
-def prefab_spec(p):
+def prefab_spec(p, root_transform_owner):
     groups = {}
     for m in p.get("modifications", []):
         tid = str(m["target"].get("file_id"))
@@ -86,8 +86,16 @@ def prefab_spec(p):
             name = values["m_Name"]
             break
 
+    scene_instance_id = p["file_id"]
+    scene_root_transform_id = scene_instance_id + 1
+    transform_parent_id = p.get("transform_parent")
+    parent_instance_id = root_transform_owner.get(transform_parent_id)
+
     return {
-        "scene_instance_id": p["file_id"],
+        "scene_instance_id": scene_instance_id,
+        "scene_root_transform_id": scene_root_transform_id,
+        "transform_parent_id": transform_parent_id,
+        "parent_instance_id": parent_instance_id,
         "source": p.get("source_prefab"),
         "name": name,
         "position": pos,
@@ -127,18 +135,24 @@ def main():
     args = ap.parse_args()
 
     m = json.loads(args.manifest.read_text(encoding="utf-8"))
-    prefabs = []
+    raw_prefabs = []
     for p in m.get("prefab_instances", []):
         path = ((p.get("source_prefab") or {}).get("path") or "")
         if path == "Assets/QCWorld/QCWorld.obj" or path.startswith("Assets/WinterLodge/"):
-            prefabs.append(prefab_spec(p))
+            raw_prefabs.append(p)
+
+    # Unity serializes the stripped root Transform immediately after each imported
+    # PrefabInstance in this exact source scene. Mapping those IDs lets Android
+    # preserve the real hierarchy (WinterLodge props -> QCWorld, Display -> CRT).
+    root_transform_owner = {p["file_id"] + 1: p["file_id"] for p in raw_prefabs}
+    prefabs = [prefab_spec(p, root_transform_owner) for p in raw_prefabs]
 
     qcworld = next((p for p in prefabs if (p["source"] or {}).get("path") == "Assets/QCWorld/QCWorld.obj"), None)
     if qcworld is None:
         raise SystemExit("QCWorld instance missing from Main.unity")
 
     spec = {
-        "format": "nexa-questcraft-room-v1",
+        "format": "nexa-questcraft-room-v2",
         "source": {
             "repository": "QuestCraftPlusPlus/QCXR-XR-Wrapper",
             "branch": "CardboardCraft",
@@ -167,6 +181,7 @@ def main():
     print("  QCWorld overrides:", len(qcworld["overrides_by_file_id"]))
     print("  props:", len(spec["props"]))
     print("  materials:", len(spec["qcworld_materials"]))
+    print("  parent links:", sum(1 for p in prefabs if p["parent_instance_id"] is not None))
     print("  output:", args.output)
 
 
