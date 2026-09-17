@@ -5,6 +5,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -22,6 +23,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     private static final String MC_VERSION = "1.20.4";
 
     private final AtomicBoolean launching = new AtomicBoolean(false);
+    private NexaLodgeView lodgeView;
     private LinearLayout overlay;
     private TextView status;
     private Button login;
@@ -34,21 +36,29 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     }
 
     private void buildUi() {
+        lodgeView = new NexaLodgeView(this);
+        FrameLayout.LayoutParams lodgeLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        // Root currently contains the Minecraft SurfaceView and the tiny ARCore tracker.
+        // Put the lodge between them; the normal Android overlay is added last.
+        getRootLayout().addView(lodgeView, Math.min(1, getRootLayout().getChildCount()), lodgeLp);
+
         overlay = new LinearLayout(this);
         overlay.setOrientation(LinearLayout.VERTICAL);
         overlay.setGravity(Gravity.CENTER);
         overlay.setPadding(48, 48, 48, 48);
-        overlay.setBackgroundColor(Color.rgb(5, 10, 18));
+        overlay.setBackgroundColor(Color.argb(76, 5, 10, 18));
 
         TextView title = text("NEXA QUESTCRAFT", 28f, Color.WHITE);
         overlay.addView(title);
-        TextView subtitle = text("Android Studio Native • VRBox • 6DoF • Controle + maos", 14f,
-                Color.rgb(145, 190, 230));
+        TextView subtitle = text("Sala original QuestCraft • VRBox • 6DoF • Controle + maos", 14f,
+                Color.rgb(170, 210, 240));
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
         subLp.topMargin = 16;
         overlay.addView(subtitle, subLp);
 
-        status = text("Entre com Microsoft. Se a conta nao possuir Java, o Pojlib usa o Demo Mode oficial.",
+        status = text("Carregando a sala. Entre com Microsoft; sem Java, o Pojlib usa o Demo Mode oficial.",
                 15f, Color.LTGRAY);
         LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(-1, -2);
         statusLp.topMargin = 30;
@@ -72,7 +82,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
         playLp.topMargin = 14;
         overlay.addView(play, playLp);
 
-        getRootLayout().addView(overlay, new android.widget.FrameLayout.LayoutParams(-1, -1));
+        getRootLayout().addView(overlay, new FrameLayout.LayoutParams(-1, -1));
     }
 
     private TextView text(String value, float size, int color) {
@@ -81,6 +91,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
         t.setTextSize(size);
         t.setTextColor(color);
         t.setGravity(Gravity.CENTER);
+        t.setShadowLayer(8f, 0f, 2f, Color.BLACK);
         return t;
     }
 
@@ -159,7 +170,13 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
             setStatus("Aplicando Vivecraft Nexa e preparando JVM...");
             API.prelaunch(this, all, instance);
             API.currentInstance = instance;
-            runOnUiThread(() -> overlay.setVisibility(View.GONE));
+            runOnUiThread(() -> {
+                overlay.setVisibility(View.GONE);
+                if (lodgeView != null) {
+                    lodgeView.pauseRendering();
+                    lodgeView.setVisibility(View.GONE);
+                }
+            });
             API.launchInstance(this, API.currentAcc, instance);
         } catch (Throwable t) {
             fail("Falha ao iniciar: " + shortMessage(t));
@@ -169,10 +186,29 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     private void fail(String value) {
         launching.set(false);
         runOnUiThread(() -> {
+            if (lodgeView != null) {
+                lodgeView.setVisibility(View.VISIBLE);
+                lodgeView.resumeRendering();
+            }
             overlay.setVisibility(View.VISIBLE);
             play.setEnabled(API.currentAcc != null);
             status.setText(value);
         });
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        if (lodgeView != null && lodgeView.getVisibility() == View.VISIBLE) lodgeView.resumeRendering();
+    }
+
+    @Override protected void onPause() {
+        if (lodgeView != null) lodgeView.pauseRendering();
+        super.onPause();
+    }
+
+    @Override protected void onDestroy() {
+        if (lodgeView != null) lodgeView.destroyRenderer();
+        super.onDestroy();
     }
 
     private static String shortMessage(Throwable t) {
