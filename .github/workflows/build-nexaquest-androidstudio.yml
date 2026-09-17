@@ -106,6 +106,43 @@ jobs:
             out/room/guid-index.json \
             questcraft_android/app/src/main/assets/nexa/nexa-mainmenu.json
           cp questcraft_android/app/src/main/assets/nexa/nexa-mainmenu.json out/room/nexa-mainmenu.json
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-pil
+          mkdir -p \
+            questcraft_android/app/src/main/assets/nexa/ui \
+            questcraft_android/app/src/main/assets/nexa/ui/fonts
+          python3 - <<'PY'
+          import json, pathlib, shutil
+          ui=json.load(open('questcraft_android/app/src/main/assets/nexa/nexa-mainmenu.json'))
+          dest=pathlib.Path('questcraft_android/app/src/main/assets/nexa/ui')
+          copied=[]
+          for ref in ui.get('asset_refs',[]):
+              rel=ref.get('path') or ''
+              if not rel.lower().endswith('.png'):
+                  continue
+              src=pathlib.Path('upstream/qcxr-room')/rel
+              if not src.is_file():
+                  raise SystemExit(f'Missing original UI sprite: {rel}')
+              out=dest/src.name
+              shutil.copy2(src,out)
+              copied.append(out.name)
+          assert len(copied) >= 16, copied
+          print('Copied original QuestCraft UI sprites:', len(copied))
+          PY
+          python3 questcraft_nexa/room_converter/extract_tmp_sdf.py \
+            'upstream/qcxr-room/Assets/Resources/UI/Sunflower-Bold SDF.asset' \
+            questcraft_android/app/src/main/assets/nexa/ui/fonts --name sunflower-bold
+          python3 questcraft_nexa/room_converter/extract_tmp_sdf.py \
+            'upstream/qcxr-room/Assets/Resources/UI/Perfect DOS VGA 437 Win SDF.asset' \
+            questcraft_android/app/src/main/assets/nexa/ui/fonts --name perfect-dos
+          python3 questcraft_nexa/room_converter/extract_tmp_sdf.py \
+            'upstream/qcxr-room/Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset' \
+            questcraft_android/app/src/main/assets/nexa/ui/fonts --name liberation-sans
+          cp 'upstream/qcxr-room/Assets/TextMesh Pro/Fonts/LiberationSans.ttf' \
+            questcraft_android/app/src/main/assets/nexa/ui/fonts/LiberationSans.ttf
+          test -s questcraft_android/app/src/main/assets/nexa/ui/fonts/sunflower-bold.png
+          test -s questcraft_android/app/src/main/assets/nexa/ui/fonts/sunflower-bold.json
           python3 - <<'PY'
           import json
           p=json.load(open('questcraft_android/app/src/main/assets/nexa/nexa-room.json'))
@@ -221,6 +258,10 @@ jobs:
           test -s "$APK"
           unzip -l "$APK" | grep -F 'assets/nexa/nexa-room.json'
           unzip -l "$APK" | grep -F 'assets/nexa/nexa-mainmenu.json'
+          unzip -l "$APK" | grep -F 'assets/nexa/ui/Background.png'
+          unzip -l "$APK" | grep -F 'assets/nexa/ui/MainButton.png'
+          unzip -l "$APK" | grep -F 'assets/nexa/ui/fonts/sunflower-bold.png'
+          unzip -l "$APK" | grep -F 'assets/nexa/ui/fonts/sunflower-bold.json'
           unzip -l "$APK" | grep -F 'assets/nexa/licenses/QCXR-GPL-3.0.txt'
           test "$(unzip -Z1 "$APK" | grep -Ec '^assets/nexa/lodge_models/.*\.glb$')" -eq 8
           mkdir -p out/final
