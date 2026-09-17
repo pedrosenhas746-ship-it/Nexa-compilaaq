@@ -3,10 +3,9 @@ package com.nexa.questcraft;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
-import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -17,86 +16,101 @@ import pojlib.UnityPlayerActivity;
 import pojlib.util.Constants;
 import pojlib.util.json.MinecraftInstances;
 
-/** Native Android launcher. No Unity runtime is used. */
+/**
+ * Native Android QuestCraft launcher.
+ *
+ * The original QuestCraft lodge is the launcher UI. No permanent Android
+ * button panel is drawn over the room. A tiny status banner is only shown
+ * while authentication / installation is active or when an error occurs.
+ */
 public final class NexaQuestActivity extends UnityPlayerActivity {
     private static final String INSTANCE_NAME = "Nexa QuestCraft 1.20.4";
     private static final String MC_VERSION = "1.20.4";
 
     private final AtomicBoolean launching = new AtomicBoolean(false);
-    private NexaLodgeView lodgeView;
-    private LinearLayout overlay;
-    private TextView status;
-    private Button login;
-    private Button play;
+    private final AtomicBoolean loginRunning = new AtomicBoolean(false);
 
-    @Override protected void onCreate(Bundle savedInstanceState) {
+    private NexaLodgeView lodgeView;
+    private TextView statusBanner;
+    private volatile String lastMsaMessage = "";
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        buildUi();
+        buildLodgeUi();
         watchLoginState();
     }
 
-    private void buildUi() {
+    private void buildLodgeUi() {
         lodgeView = new NexaLodgeView(this);
         FrameLayout.LayoutParams lodgeLp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
-        // Root currently contains the Minecraft SurfaceView and the tiny ARCore tracker.
-        // Put the lodge between them; the normal Android overlay is added last.
-        getRootLayout().addView(lodgeView, Math.min(1, getRootLayout().getChildCount()), lodgeLp);
 
-        overlay = new LinearLayout(this);
-        overlay.setOrientation(LinearLayout.VERTICAL);
-        overlay.setGravity(Gravity.CENTER);
-        overlay.setPadding(48, 48, 48, 48);
-        overlay.setBackgroundColor(Color.argb(76, 5, 10, 18));
+        // Root also owns Minecraft's SurfaceView and the tiny ARCore tracker.
+        // The lodge sits above the Minecraft surface while the launcher is open.
+        getRootLayout().addView(
+                lodgeView,
+                Math.min(1, getRootLayout().getChildCount()),
+                lodgeLp);
 
-        TextView title = text("NEXA QUESTCRAFT", 28f, Color.WHITE);
-        overlay.addView(title);
-        TextView subtitle = text("Sala original QuestCraft • VRBox • 6DoF • Controle + maos", 14f,
-                Color.rgb(170, 210, 240));
-        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
-        subLp.topMargin = 16;
-        overlay.addView(subtitle, subLp);
+        // Useful when testing without the phone inside the VRBox.
+        lodgeView.setOnClickListener(v -> activatePrimaryAction());
 
-        status = text("Carregando a sala. Entre com Microsoft; sem Java, o Pojlib usa o Demo Mode oficial.",
-                15f, Color.LTGRAY);
-        LinearLayout.LayoutParams statusLp = new LinearLayout.LayoutParams(-1, -2);
-        statusLp.topMargin = 30;
-        overlay.addView(status, statusLp);
+        statusBanner = new TextView(this);
+        statusBanner.setTextColor(Color.WHITE);
+        statusBanner.setTextSize(14f);
+        statusBanner.setGravity(Gravity.CENTER);
+        statusBanner.setPadding(24, 14, 24, 14);
+        statusBanner.setBackgroundColor(Color.argb(205, 4, 8, 14));
+        statusBanner.setVisibility(View.GONE);
 
-        login = new Button(this);
-        login.setText("ENTRAR MICROSOFT / DEMO");
-        login.setOnClickListener(v -> {
-            status.setText("Iniciando login por codigo do dispositivo...");
+        FrameLayout.LayoutParams statusLp = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM);
+        getRootLayout().addView(statusBanner, statusLp);
+    }
+
+    /**
+     * In the lodge, A / Enter is the primary Quest-style select action.
+     * Once Minecraft owns the screen all key events go through Pojlib normally.
+     */
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (lodgeView != null
+                && lodgeView.getVisibility() == View.VISIBLE
+                && event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getRepeatCount() == 0) {
+            int key = event.getKeyCode();
+            if (key == KeyEvent.KEYCODE_BUTTON_A
+                    || key == KeyEvent.KEYCODE_ENTER
+                    || key == KeyEvent.KEYCODE_DPAD_CENTER) {
+                activatePrimaryAction();
+                return true;
+            }
+        }
+        return super.dispatchKeyEvent(event);
+    }
+
+    private void activatePrimaryAction() {
+        if (launching.get()) return;
+        if (API.currentAcc == null) {
+            beginLogin();
+        } else {
+            beginLaunch();
+        }
+    }
+
+    private void beginLogin() {
+        if (!loginRunning.compareAndSet(false, true)) return;
+        showStatus("Conectando conta Microsoft / Demo Mode...");
+        try {
             API.login(this, null);
-        });
-        LinearLayout.LayoutParams loginLp = new LinearLayout.LayoutParams(buttonWidth(), -2);
-        loginLp.topMargin = 24;
-        overlay.addView(login, loginLp);
-
-        play = new Button(this);
-        play.setText("JOGAR QUESTCRAFT");
-        play.setEnabled(false);
-        play.setOnClickListener(v -> beginLaunch());
-        LinearLayout.LayoutParams playLp = new LinearLayout.LayoutParams(buttonWidth(), -2);
-        playLp.topMargin = 14;
-        overlay.addView(play, playLp);
-
-        getRootLayout().addView(overlay, new FrameLayout.LayoutParams(-1, -1));
-    }
-
-    private TextView text(String value, float size, int color) {
-        TextView t = new TextView(this);
-        t.setText(value);
-        t.setTextSize(size);
-        t.setTextColor(color);
-        t.setGravity(Gravity.CENTER);
-        t.setShadowLayer(8f, 0f, 2f, Color.BLACK);
-        return t;
-    }
-
-    private int buttonWidth() {
-        return Math.max(430, getResources().getDisplayMetrics().widthPixels / 3);
+        } catch (Throwable t) {
+            loginRunning.set(false);
+            showStatus("Falha no login: " + shortMessage(t));
+        }
     }
 
     private void watchLoginState() {
@@ -104,33 +118,67 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
             while (!isFinishing()) {
                 try {
                     if (API.currentAcc != null) {
-                        runOnUiThread(() -> {
-                            login.setEnabled(false);
-                            play.setEnabled(true);
-                            status.setText(API.currentAcc.isDemoMode
-                                    ? "Demo Mode oficial pronto: " + API.currentAcc.username
-                                    : "Conta Minecraft pronta: " + API.currentAcc.username);
-                        });
+                        loginRunning.set(false);
+                        String name = API.currentAcc.username == null
+                                ? "Conta pronta" : API.currentAcc.username;
+                        showStatus(API.currentAcc.isDemoMode
+                                ? "Demo Mode oficial pronto: " + name + " • pressione A para jogar"
+                                : "Conta Minecraft pronta: " + name + " • pressione A para jogar");
+                        hideStatusLater(2600L);
                         return;
                     }
+
                     String msg = API.msaMessage;
-                    if (msg != null && !msg.isEmpty()) runOnUiThread(() -> status.setText(msg));
-                    Thread.sleep(250L);
-                } catch (Throwable ignored) { return; }
+                    if (msg != null) {
+                        msg = msg.trim();
+                        if (!msg.isEmpty() && !msg.equals(lastMsaMessage)) {
+                            lastMsaMessage = msg;
+                            showStatus(msg);
+                        }
+                    }
+                    Thread.sleep(200L);
+                } catch (InterruptedException e) {
+                    return;
+                } catch (Throwable ignored) {
+                    return;
+                }
             }
         }, "NexaQuest-LoginWatcher");
         watcher.setDaemon(true);
         watcher.start();
     }
 
-    private void setStatus(String value) {
-        runOnUiThread(() -> status.setText(value));
+    private void showStatus(String value) {
+        runOnUiThread(() -> {
+            if (statusBanner == null) return;
+            statusBanner.setText(value == null ? "" : value);
+            statusBanner.setVisibility(View.VISIBLE);
+        });
     }
+
+    private void hideStatus() {
+        runOnUiThread(() -> {
+            if (statusBanner != null) statusBanner.setVisibility(View.GONE);
+        });
+    }
+
+    private void hideStatusLater(long delayMs) {
+        runOnUiThread(() -> {
+            if (statusBanner == null) return;
+            statusBanner.removeCallbacks(hideStatusRunnable);
+            statusBanner.postDelayed(hideStatusRunnable, delayMs);
+        });
+    }
+
+    private final Runnable hideStatusRunnable = () -> {
+        if (statusBanner != null && !launching.get()) {
+            statusBanner.setVisibility(View.GONE);
+        }
+    };
 
     private void beginLaunch() {
         if (API.currentAcc == null || !launching.compareAndSet(false, true)) return;
-        play.setEnabled(false);
-        setStatus("Preparando Minecraft/Fabric 1.20.4...");
+        showStatus("Preparando Minecraft / Fabric 1.20.4...");
 
         new Thread(() -> {
             try {
@@ -142,9 +190,17 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
                     return;
                 }
 
-                setStatus("Primeira execucao: baixando Minecraft/Fabric...");
-                InstanceHandler.create(this, all, INSTANCE_NAME, Constants.USER_HOME, true,
-                        MC_VERSION, "Fabric", null, created -> {
+                showStatus("Primeira execucao: baixando Minecraft / Fabric...");
+                InstanceHandler.create(
+                        this,
+                        all,
+                        INSTANCE_NAME,
+                        Constants.USER_HOME,
+                        true,
+                        MC_VERSION,
+                        "Fabric",
+                        null,
+                        created -> {
                             if (created == null) {
                                 fail("Falha ao criar instancia");
                                 return;
@@ -160,23 +216,31 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     private MinecraftInstances.Instance findInstance(MinecraftInstances all) {
         if (all == null || all.instances == null) return null;
         for (MinecraftInstances.Instance i : all.instances) {
-            if (i != null && (INSTANCE_NAME.equals(i.instanceName) || MC_VERSION.equals(i.versionName))) return i;
+            if (i != null
+                    && (INSTANCE_NAME.equals(i.instanceName)
+                    || MC_VERSION.equals(i.versionName))) {
+                return i;
+            }
         }
         return null;
     }
 
-    private void prelaunchAndRun(MinecraftInstances all, MinecraftInstances.Instance instance) {
+    private void prelaunchAndRun(
+            MinecraftInstances all,
+            MinecraftInstances.Instance instance) {
         try {
-            setStatus("Aplicando Vivecraft Nexa e preparando JVM...");
+            showStatus("Aplicando Vivecraft Nexa e preparando JVM...");
             API.prelaunch(this, all, instance);
             API.currentInstance = instance;
+
             runOnUiThread(() -> {
-                overlay.setVisibility(View.GONE);
+                hideStatus();
                 if (lodgeView != null) {
                     lodgeView.pauseRendering();
                     lodgeView.setVisibility(View.GONE);
                 }
             });
+
             API.launchInstance(this, API.currentAcc, instance);
         } catch (Throwable t) {
             fail("Falha ao iniciar: " + shortMessage(t));
@@ -190,30 +254,36 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
                 lodgeView.setVisibility(View.VISIBLE);
                 lodgeView.resumeRendering();
             }
-            overlay.setVisibility(View.VISIBLE);
-            play.setEnabled(API.currentAcc != null);
-            status.setText(value);
+            showStatus(value);
         });
     }
 
-    @Override protected void onResume() {
+    @Override
+    protected void onResume() {
         super.onResume();
-        if (lodgeView != null && lodgeView.getVisibility() == View.VISIBLE) lodgeView.resumeRendering();
+        if (lodgeView != null && lodgeView.getVisibility() == View.VISIBLE) {
+            lodgeView.resumeRendering();
+        }
     }
 
-    @Override protected void onPause() {
+    @Override
+    protected void onPause() {
         if (lodgeView != null) lodgeView.pauseRendering();
         super.onPause();
     }
 
-    @Override protected void onDestroy() {
+    @Override
+    protected void onDestroy() {
+        if (statusBanner != null) statusBanner.removeCallbacks(hideStatusRunnable);
         if (lodgeView != null) lodgeView.destroyRenderer();
         super.onDestroy();
     }
 
     private static String shortMessage(Throwable t) {
         String value = t.getMessage();
-        if (value == null || value.trim().isEmpty()) value = t.getClass().getSimpleName();
+        if (value == null || value.trim().isEmpty()) {
+            value = t.getClass().getSimpleName();
+        }
         return value.length() > 180 ? value.substring(0, 180) : value;
     }
 }
