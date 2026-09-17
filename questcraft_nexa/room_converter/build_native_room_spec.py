@@ -199,7 +199,9 @@ def main():
     ap.add_argument("manifest", type=Path)
     ap.add_argument("qcxr_root", type=Path)
     ap.add_argument("output", type=Path)
-    ap.add_argument("--source-commit", default="unknown")\n    ap.add_argument("--source-branch", default="master")\n    args = ap.parse_args()
+    ap.add_argument("--source-commit", default="unknown")
+    ap.add_argument("--source-branch", default="master")
+    args = ap.parse_args()
 
     m = json.loads(args.manifest.read_text(encoding="utf-8"))
     raw_prefabs = []
