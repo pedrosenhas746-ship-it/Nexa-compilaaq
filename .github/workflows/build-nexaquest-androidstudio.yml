@@ -78,6 +78,31 @@ jobs:
           lfs: true
           fetch-depth: 1
 
+      - name: Checkout original QuestCraft lodge source
+        uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/QCXR-XR-Wrapper
+          ref: CardboardCraft
+          path: upstream/qcxr-room
+          fetch-depth: 1
+
+      - name: Generate exact lodge metadata for Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/room questcraft_android/app/src/main/assets/nexa
+          python3 questcraft_nexa/room_converter/guid_index.py \
+            upstream/qcxr-room/Assets out/room/guid-index.json
+          python3 questcraft_nexa/room_converter/unity_scene_manifest.py \
+            upstream/qcxr-room/Assets/Scenes/Main.unity \
+            out/room/guid-index.json out/room/main-scene.json \
+            --report out/room/report.txt
+          python3 questcraft_nexa/room_converter/build_native_room_spec.py \
+            out/room/main-scene.json upstream/qcxr-room \
+            questcraft_android/app/src/main/assets/nexa/nexa-room.json
+          grep -Fq 'Assets/QCWorld/QCWorld.obj' questcraft_android/app/src/main/assets/nexa/nexa-room.json
+          grep -Fq 'Play Button' questcraft_android/app/src/main/assets/nexa/nexa-room.json
+
       - name: Patch and build native Pojlib AAR
         shell: bash
         run: |
@@ -137,10 +162,11 @@ jobs:
           set -euo pipefail
           APK='questcraft_android/app/build/outputs/apk/debug/app-debug.apk'
           test -s "$APK"
+          unzip -l "$APK" | grep -F 'assets/nexa/nexa-room.json'
           mkdir -p out/final
-          cp "$APK" out/final/NexaQuest-AndroidStudio-1.2-debug.apk
-          sha256sum out/final/NexaQuest-AndroidStudio-1.2-debug.apk | tee out/final/NexaQuest-AndroidStudio-1.2-debug.apk.sha256
-          ls -lh out/final/NexaQuest-AndroidStudio-1.2-debug.apk
+          cp "$APK" out/final/NexaQuest-AndroidStudio-1.3-roomdata-debug.apk
+          sha256sum out/final/NexaQuest-AndroidStudio-1.3-roomdata-debug.apk | tee out/final/NexaQuest-AndroidStudio-1.3-roomdata-debug.apk.sha256
+          ls -lh out/final/NexaQuest-AndroidStudio-1.3-roomdata-debug.apk
 
       - name: Upload APK
         if: always()
@@ -149,6 +175,7 @@ jobs:
           name: NexaQuest-AndroidStudio-APK
           path: |
             out/final/**
+            out/room/**
             questcraft_android/app/libs/Pojlib-release.aar
             out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
           if-no-files-found: warn
