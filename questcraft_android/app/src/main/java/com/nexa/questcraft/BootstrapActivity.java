@@ -3,7 +3,6 @@ package com.nexa.questcraft;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
@@ -16,12 +15,19 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+
 /**
  * Crash-isolated launcher. This class intentionally has zero Pojlib/Filament/ARCore
  * references so the app can always reach a visible screen before the heavy runtime.
  */
 public final class BootstrapActivity extends Activity {
-    private static final String PREFS = "nexa_boot";
+    private static final String STAGE_FILE = "nexa_boot_stage.txt";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView status;
     private Button retry;
