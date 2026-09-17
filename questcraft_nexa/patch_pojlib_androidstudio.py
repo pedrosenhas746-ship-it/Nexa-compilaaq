@@ -68,14 +68,35 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
     private Gamepad mGamepad;
     private RemapperManager mInputManager;
 
-    static {
-        System.loadLibrary("pojavexec");
+    private volatile boolean pojavNativeReady;
+    private volatile String pojavNativeError = "";
+
+    protected final boolean isPojavNativeReady() { return pojavNativeReady; }
+    protected final String getPojavNativeError() { return pojavNativeError; }
+
+    private void ensurePojavNative() {
+        if (pojavNativeReady) return;
+        try {
+            System.loadLibrary("pojavexec");
+            pojavNativeReady = true;
+            pojavNativeError = "";
+        } catch (Throwable t) {
+            pojavNativeReady = false;
+            String m = t.getMessage();
+            pojavNativeError = (m == null || m.trim().isEmpty())
+                    ? t.getClass().getSimpleName() : m;
+        }
     }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
-        Constants.initConstants(this);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         super.onCreate(savedInstanceState);
+        try {
+            Constants.initConstants(this);
+        } catch (Throwable t) {
+            pojavNativeError = "Constants: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
+        }
+        ensurePojavNative();
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN |
@@ -100,18 +121,38 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
         minecraftSurface.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder holder) {
-                nativeSetSurface(holder.getSurface(), Math.max(1, minecraftSurface.getWidth()), Math.max(1, minecraftSurface.getHeight()));
+                if (!pojavNativeReady) return;
+                try {
+                    nativeSetSurface(holder.getSurface(), Math.max(1, minecraftSurface.getWidth()), Math.max(1, minecraftSurface.getHeight()));
+                } catch (Throwable t) {
+                    pojavNativeReady = false;
+                    pojavNativeError = "surfaceCreated: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
+                }
             }
             @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                nativeSetSurface(holder.getSurface(), Math.max(1, width), Math.max(1, height));
-                CallbackBridge.sendUpdateWindowSize(Math.max(1, width), Math.max(1, height));
+                if (!pojavNativeReady) return;
+                try {
+                    nativeSetSurface(holder.getSurface(), Math.max(1, width), Math.max(1, height));
+                    CallbackBridge.sendUpdateWindowSize(Math.max(1, width), Math.max(1, height));
+                } catch (Throwable t) {
+                    pojavNativeReady = false;
+                    pojavNativeError = "surfaceChanged: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
+                }
             }
             @Override public void surfaceDestroyed(SurfaceHolder holder) {
-                nativeClearSurface();
+                if (!pojavNativeReady) return;
+                try { nativeClearSurface(); } catch (Throwable ignored) { }
             }
         });
 
-        updateWindowSize(this);
+        if (pojavNativeReady) {
+            try { updateWindowSize(this); } catch (Throwable t) {
+                pojavNativeReady = false;
+                pojavNativeError = "window init: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
+            }
+        } else {
+            currentDisplayMetrics = getDisplayMetrics(this);
+        }
         GLOBAL_CLIPBOARD = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         mInputManager = new RemapperManager(this, new RemapperView.Builder(null)
                 .remapA(true).remapB(true).remapX(true).remapY(true)
@@ -120,7 +161,13 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
                 .remapLeftShoulder(true).remapRightShoulder(true)
                 .remapLeftTrigger(true).remapRightTrigger(true)
                 .remapDpad(true));
-        CallbackBridge.nativeSetUseInputStackQueue(true);
+        if (pojavNativeReady) {
+            try { CallbackBridge.nativeSetUseInputStackQueue(true); }
+            catch (Throwable t) {
+                pojavNativeReady = false;
+                pojavNativeError = "input init: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
+            }
+        }
     }
 
     public FrameLayout getRootLayout() { return rootLayout; }
@@ -195,6 +242,7 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
     @SuppressLint("NewApi")
     @Override public boolean dispatchGenericMotionEvent(MotionEvent event) {
         NexaXRBridge.onMotionEvent(event);
+        if (!pojavNativeReady) return super.dispatchGenericMotionEvent(event);
         if (Gamepad.isGamepadEvent(event)) {
             if (mGamepad == null) createGamepad(event.getDevice());
             mInputManager.handleMotionEventInput(this, event, mGamepad);
@@ -205,6 +253,7 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         NexaXRBridge.onKeyEvent(event);
+        if (!pojavNativeReady) return super.dispatchKeyEvent(event);
         if (processKeyEvent(event)) return true;
         if (event.getKeyCode() == KeyEvent.KEYCODE_BACK && event.getAction() == KeyEvent.ACTION_UP) {
             sendKeyPress(LwjglGlfwKeycode.GLFW_KEY_ESCAPE);
@@ -254,7 +303,9 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
     @Override protected void onDestroy() {
         if (nexaTracking != null) nexaTracking.shutdown();
-        nativeClearSurface();
+        if (pojavNativeReady) {
+            try { nativeClearSurface(); } catch (Throwable ignored) { }
+        }
         super.onDestroy();
     }
 
