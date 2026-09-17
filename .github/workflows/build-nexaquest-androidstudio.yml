@@ -280,8 +280,21 @@ jobs:
           unzip -l "$APK" | grep -F 'assets/nexa/ui/rendered/hitboxes.json'
           unzip -l "$APK" | grep -F 'assets/nexa/licenses/QCXR-GPL-3.0.txt'
           test "$(unzip -Z1 "$APK" | grep -Ec '^assets/nexa/lodge_models/.*\.glb$')" -eq 8
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libpojavexec.so'
+          unzip -l "$APK" | grep -F 'lib/arm64-v8a/libjrelauncher.so'
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/nexa-manifest.xml
+          grep -Fq 'com.nexa.questcraft.BootstrapActivity' /tmp/nexa-manifest.xml
+          grep -Fq 'com.nexa.questcraft.NexaQuestActivity' /tmp/nexa-manifest.xml
+          grep -Fq 'android:process=":runtime"' /tmp/nexa-manifest.xml
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('questcraft_nexa/patch_pojlib_androidstudio.py').read_text()
+          assert 'static {\\n        System.loadLibrary("pojavexec");' not in s
+          print('Lazy native-load check passed')
+          PY
           mkdir -p out/final
-          OUT='out/final/NexaQuest-AndroidStudio-1.4.3-original-lodge-ui-data-debug.apk'
+          cp /tmp/nexa-manifest.xml out/final/AndroidManifest-decoded.xml
+          OUT='out/final/NexaQuest-AndroidStudio-1.4.4-BOOTFIX-debug.apk'
           cp "$APK" "$OUT"
           sha256sum "$OUT" | tee "$OUT.sha256"
           ls -lh "$OUT"
