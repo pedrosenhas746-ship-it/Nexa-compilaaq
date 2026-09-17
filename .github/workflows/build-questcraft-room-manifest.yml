@@ -12,19 +12,29 @@ on:
 permissions:
   contents: read
 
+env:
+  QCXR_ROOM_COMMIT: 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
+
 jobs:
   extract-room:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/checkout@v4
         with:
           repository: QuestCraftPlusPlus/QCXR-XR-Wrapper
-          ref: a8d46ea0db48d31015c1794bf5159a7b9c6edb4d
+          ref: ${{ env.QCXR_ROOM_COMMIT }}
           path: upstream/qcxr
           fetch-depth: 1
+
+      - name: Install room conversion tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq assimp-utils
+          assimp version
 
       - name: Build Unity GUID index
         run: |
@@ -51,6 +61,53 @@ jobs:
             upstream/qcxr \
             out/room/nexa-room.json
 
+      - name: Convert original lodge models to GLB
+        run: |
+          set -euo pipefail
+          mkdir -p out/room/lodge_models
+          python3 questcraft_nexa/room_converter/convert_lodge_models.py \
+            out/room/nexa-room.json \
+            upstream/qcxr \
+            out/room/lodge_models
+
+      - name: Extract original MainMenu Canvas
+        run: |
+          set -euo pipefail
+          python3 questcraft_nexa/room_converter/extract_main_menu_ui.py \
+            upstream/qcxr/Assets/Scenes/Main.unity \
+            out/room/guid-index.json \
+            out/room/nexa-mainmenu.json
+          python3 - <<'PY'
+          import json, pathlib
+          p=json.load(open('out/room/nexa-mainmenu.json'))
+          assert p['format'] == 'nexa-questcraft-mainmenu-ui-v1'
+          names={o['name'] for o in p['objects']}
+          required={'MainCanvas','MainPanel','Bottom Bar','Play Button','InstanceManagerButton','ModSearchButton'}
+          assert not (required-names), sorted(required-names)
+          refs=p.get('asset_refs',[])
+          report=[]
+          for r in refs:
+              rel=r.get('path')
+              if not rel:
+                  continue
+              src=pathlib.Path('upstream/qcxr')/rel
+              report.append({
+                  'path': rel,
+                  'exists': src.exists(),
+                  'bytes': src.stat().st_size if src.is_file() else None,
+                  'suffix': src.suffix.lower() if src.exists() else None,
+                  'guid': r.get('guid'),
+                  'file_id': r.get('file_id'),
+              })
+          pathlib.Path('out/room/ui-assets-report.json').write_text(
+              json.dumps(report,indent=2), encoding='utf-8')
+          print('Original MainMenu objects:', p['object_count'])
+          print('Original MainMenu canvas:', p.get('canvas_size'))
+          print('Referenced UI assets:', len(refs))
+          for x in report:
+              print(('OK  ' if x['exists'] else 'MISS') + ' ' + x['path'])
+          PY
+
       - name: Verify original launcher anchors and hierarchy
         run: |
           set -euo pipefail
@@ -58,7 +115,7 @@ jobs:
           grep -Fq 'Assets/QCWorld/QCWorld.obj' out/room/nexa-room.json
           grep -Fq 'Assets/WinterLodge/Bear/Bear.fbx' out/room/nexa-room.json
           python3 - <<'PY'
-          import json
+          import json, pathlib
           p=json.load(open('out/room/nexa-room.json'))
           assert p['format'] == 'nexa-questcraft-room-v2'
           assert p['source']['commit'] == 'a8d46ea0db48d31015c1794bf5159a7b9c6edb4d'
@@ -66,24 +123,35 @@ jobs:
           assert p['qcworld']['parent_instance_id'] is None
           assert len(p['props']) == 7
           assert len(p['qcworld_materials']) == 128
+          assert len(p.get('runtime_models', [])) == 8
           assert any(o['name']=='Play Button' for o in p['main_menu'])
+          assert p['asset_policy']['qcworld_glb_contains_minecraft_texture_bytes'] is False
 
           by_source={x['source']['path']: x for x in p['props']}
           qc_id=p['qcworld']['scene_instance_id']
           crt=by_source['Assets/WinterLodge/Reality Display/Crt Body.obj']
           display=by_source['Assets/WinterLodge/Reality Display/Display.obj']
           assert display['parent_instance_id'] == crt['scene_instance_id']
-          for path,item in by_source.items():
-              if path != 'Assets/WinterLodge/Reality Display/Display.obj':
-                  assert item['parent_instance_id'] == qc_id, (path, item['parent_instance_id'], qc_id)
-          print('Native lodge spec verified:', len(p['main_menu']), 'menu objects,', len(p['qcworld_materials']), 'materials, hierarchy OK')
+          for src,item in by_source.items():
+              if src != 'Assets/WinterLodge/Reality Display/Display.obj':
+                  assert item['parent_instance_id'] == qc_id, (src, item['parent_instance_id'], qc_id)
+
+          glbs=list(pathlib.Path('out/room/lodge_models').glob('*.glb'))
+          assert len(glbs)==8, len(glbs)
+          assert all(x.stat().st_size >= 128 for x in glbs)
+          print('Native lodge conversion verified:', len(glbs), 'GLBs, hierarchy OK')
           PY
           cat out/room/report.txt
 
-      - name: Upload room manifest
+      - name: Copy source license
+        run: |
+          set -euo pipefail
+          cp upstream/qcxr/LICENSE out/room/QCXR-LICENSE.txt
+
+      - name: Upload converted original room
         uses: actions/upload-artifact@v4
         with:
-          name: QuestCraft-Original-Lodge-Manifest
+          name: QuestCraft-Original-Lodge-Native
           path: out/room/**
           if-no-files-found: error
           retention-days: 14
