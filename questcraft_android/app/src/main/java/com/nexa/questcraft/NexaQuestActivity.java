@@ -43,6 +43,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
 
     private void buildLodgeUi() {
         lodgeView = new NexaLodgeView(this);
+        lodgeView.setMenuListener(this::onLodgeMenuAction);
         FrameLayout.LayoutParams lodgeLp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
@@ -91,6 +92,28 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    private void onLodgeMenuAction(String buttonName) {
+        if (buttonName == null) return;
+        String n = buttonName.toLowerCase(java.util.Locale.ROOT);
+        if (n.contains("play")) {
+            activatePrimaryAction();
+            return;
+        }
+        if (n.contains("account") || n.contains("login") || n.contains("microsoft")) {
+            beginLogin();
+            return;
+        }
+        if (n.contains("instance")) {
+            showStatus("Instances reconhecido no CRT original • selecao nativa em integracao");
+            hideStatusLater(1800L);
+            return;
+        }
+        if (n.contains("mod")) {
+            showStatus("Mods reconhecido no CRT original • navegador nativo em integracao");
+            hideStatusLater(1800L);
+        }
     }
 
     private void activatePrimaryAction() {
