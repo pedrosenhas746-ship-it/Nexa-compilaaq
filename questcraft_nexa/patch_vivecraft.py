@@ -22,7 +22,7 @@ new = """    public enum VRProvider implements OptionEnum<VRProvider> {
 if old not in s:
     raise SystemExit("VRSettings provider enum anchor missing")
 s = s.replace(old, new, 1)
-old_default = "public VRProvider stereoProviderPluginID = VRProvider.OPENVR;"
+old_default = "public VRProvider stereoProviderPluginID = VRProvider.OPENXR;"
 if old_default not in s:
     raise SystemExit("VRSettings default provider anchor missing")
 s = s.replace(old_default, "public VRProvider stereoProviderPluginID = VRProvider.NEXA;", 1)
@@ -34,37 +34,21 @@ import_anchor = "import org.vivecraft.client_vr.provider.nullvr.NullVR;"
 if import_anchor not in v:
     raise SystemExit("VRState import anchor missing")
 v = v.replace(import_anchor, import_anchor + "\nimport org.vivecraft.client_vr.provider.nexavr.NexaVR;", 1)
-switch_anchor = "                case OPENXR -> dh.vr = new MCOpenXR(instance, dh);\n                default -> dh.vr = new NullVR(instance, dh);"
+
+switch_anchor = """            dh.vr = switch (dh.vrSettings.stereoProviderPluginID) {
+                case OPENVR -> new MCOpenVR(instance, dh);
+                case OPENXR -> new MCOpenXR(instance, dh);
+                default -> new NullVR(instance, dh);
+            };"""
+switch_new = """            dh.vr = switch (dh.vrSettings.stereoProviderPluginID) {
+                case OPENVR -> new MCOpenVR(instance, dh);
+                case OPENXR -> new MCOpenXR(instance, dh);
+                case NEXA -> new NexaVR(instance, dh);
+                default -> new NullVR(instance, dh);
+            };"""
 if switch_anchor not in v:
-    raise SystemExit("VRState switch anchor missing")
-v = v.replace(
-    switch_anchor,
-    "                case OPENXR -> dh.vr = new MCOpenXR(instance, dh);\n"
-    "                case NEXA -> dh.vr = new NexaVR(instance, dh);\n"
-    "                default -> dh.vr = new NullVR(instance, dh);",
-    1,
-)
+    raise SystemExit("VRState provider switch anchor missing")
+v = v.replace(switch_anchor, switch_new, 1)
 vrstate.write_text(v, encoding="utf-8")
 
-mixin = root / "common/src/main/java/org/vivecraft/mixin/client_vr/MinecraftVRMixin.java"
-m = mixin.read_text(encoding="utf-8")
-import_anchor = "import org.vivecraft.client_vr.provider.control.VRInputAction;"
-if import_anchor not in m:
-    raise SystemExit("MinecraftVRMixin import anchor missing")
-m = m.replace(import_anchor, import_anchor + "\nimport org.vivecraft.client_vr.provider.nexavr.NexaLensDistortion;", 1)
-mirror_anchor = """            int screenWidth = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenWidth() / 2;
-            int screenHeight = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenHeight();
-            if (rendertarget != null) {"""
-mirror_new = """            int screenWidth = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenWidth() / 2;
-            int screenHeight = ((WindowExtension) (Object) this.window).vivecraft$getActualScreenHeight();
-            if (NexaLensDistortion.isEnabledFor(ClientDataHolderVR.getInstance().vr) &&
-                NexaLensDistortion.blitDual(rendertarget, rendertarget1, screenWidth * 2, screenHeight)) {
-                return;
-            }
-            if (rendertarget != null) {"""
-if mirror_anchor not in m:
-    raise SystemExit("MinecraftVRMixin DUAL mirror anchor missing")
-m = m.replace(mirror_anchor, mirror_new, 1)
-mixin.write_text(m, encoding="utf-8")
-
-print("Nexa Vivecraft integration patch applied")
+print("Nexa Vivecraft integration patch applied for OpenXR-1.20.4")
