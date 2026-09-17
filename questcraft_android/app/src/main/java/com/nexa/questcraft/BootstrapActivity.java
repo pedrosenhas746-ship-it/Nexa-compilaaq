@@ -38,10 +38,7 @@ public final class BootstrapActivity extends Activity {
         hideSystemUi();
         buildUi();
 
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
-                .putString("stage", "bootstrap_ready")
-                .putLong("stage_time", System.currentTimeMillis())
-                .apply();
+        writeStage("bootstrap_ready", "");
 
         status.setText("NEXA QUESTCRAFT\nInicializando runtime VR...");
         handler.postDelayed(this::launchRuntime, 450L);
@@ -93,11 +90,7 @@ public final class BootstrapActivity extends Activity {
         runtimeStarted = true;
         launchMs = System.currentTimeMillis();
 
-        SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-        p.edit().putString("stage", "bootstrap_launching_runtime")
-                .putString("detail", "")
-                .putLong("stage_time", launchMs)
-                .apply();
+        writeStage("bootstrap_launching_runtime", "");
 
         try {
             Intent intent = new Intent();
@@ -122,9 +115,9 @@ public final class BootstrapActivity extends Activity {
         handler.postDelayed(() -> {
             if (!hasWindowFocus() && !isFinishing()) return;
 
-            SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
-            String stage = p.getString("stage", "desconhecido");
-            String detail = p.getString("detail", "");
+            String[] boot = readStage();
+            String stage = boot[0];
+            String detail = boot[1];
 
             // If runtime started successfully, Bootstrap normally stays paused.
             // Returning here shortly after launch means the isolated process died
@@ -140,6 +133,32 @@ public final class BootstrapActivity extends Activity {
                 }
             }
         }, 900L);
+    }
+
+    private void writeStage(String stage, String detail) {
+        File file = new File(getFilesDir(), STAGE_FILE);
+        try (FileOutputStream out = new FileOutputStream(file, false)) {
+            String value = stage + "\n" + (detail == null ? "" : detail) + "\n"
+                    + System.currentTimeMillis() + "\n";
+            out.write(value.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+        } catch (Throwable ignored) { }
+    }
+
+    private String[] readStage() {
+        File file = new File(getFilesDir(), STAGE_FILE);
+        if (!file.isFile()) return new String[]{"desconhecido", ""};
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(
+                new FileInputStream(file), StandardCharsets.UTF_8))) {
+            String stage = reader.readLine();
+            String detail = reader.readLine();
+            return new String[]{
+                    stage == null || stage.isEmpty() ? "desconhecido" : stage,
+                    detail == null ? "" : detail
+            };
+        } catch (Throwable ignored) {
+            return new String[]{"desconhecido", ""};
+        }
     }
 
     private void showFailure(String message) {
