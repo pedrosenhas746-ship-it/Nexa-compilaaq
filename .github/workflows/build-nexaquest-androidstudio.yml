@@ -10,6 +10,10 @@ on:
       - 'questcraft_nexa/**'
       - '.github/workflows/build-nexaquest-androidstudio.yml'
 
+concurrency:
+  group: nexaquest-androidstudio-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read
