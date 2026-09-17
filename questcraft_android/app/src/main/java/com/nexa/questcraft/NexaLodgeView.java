@@ -2,6 +2,8 @@ package com.nexa.questcraft;
 
 import android.content.Context;
 import android.content.res.AssetManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.SystemClock;
 import android.view.Choreographer;
 import android.view.Surface;
@@ -11,14 +13,18 @@ import com.google.android.filament.Camera;
 import com.google.android.filament.Engine;
 import com.google.android.filament.EntityManager;
 import com.google.android.filament.LightManager;
+import com.google.android.filament.MaterialInstance;
 import com.google.android.filament.Renderer;
 import com.google.android.filament.Scene;
 import com.google.android.filament.Skybox;
 import com.google.android.filament.SwapChain;
+import com.google.android.filament.Texture;
+import com.google.android.filament.TextureSampler;
 import com.google.android.filament.TransformManager;
 import com.google.android.filament.Viewport;
 import com.google.android.filament.android.DisplayHelper;
 import com.google.android.filament.android.FilamentHelper;
+import com.google.android.filament.android.TextureHelper;
 import com.google.android.filament.android.UiHelper;
 import com.google.android.filament.gltfio.AssetLoader;
 import com.google.android.filament.gltfio.FilamentAsset;
@@ -94,6 +100,8 @@ public final class NexaLodgeView extends TextureView
     private final ResourceLoader resourceLoader;
     private final List<FilamentAsset> loadedAssets = new ArrayList<>();
     private final List<Integer> lodgeLightEntities = new ArrayList<>();
+    private FilamentAsset displayAsset;
+    private Texture crtMenuTexture;
 
     private SwapChain swapChain;
     private boolean running;
@@ -225,6 +233,11 @@ public final class NexaLodgeView extends TextureView
             for (JSONObject item : modelSpecs) {
                 String runtimeModel = item.getString("runtime_model");
                 FilamentAsset asset = loadGlb(runtimeModel);
+                JSONObject source = item.optJSONObject("source");
+                if (source != null
+                        && "Assets/WinterLodge/Reality Display/Display.obj".equals(source.optString("path"))) {
+                    displayAsset = asset;
+                }
                 long sceneId = item.getLong("scene_instance_id");
                 Long parentSceneId = item.isNull("parent_instance_id")
                         ? null : item.optLong("parent_instance_id");
@@ -252,11 +265,66 @@ public final class NexaLodgeView extends TextureView
                 tm.commitLocalTransformTransaction();
             }
 
+            applyCrtMenuTexture("nexa/ui/rendered/main.png");
             loadOriginalLights(spec);
             roomLoaded = true;
             applyCamera(cameraAnchorPos, cameraAnchorRot);
         } catch (Throwable t) {
             android.util.Log.e("NexaLodge", "Unable to load original QuestCraft lodge", t);
+        }
+    }
+
+    private void applyCrtMenuTexture(String assetPath) {
+        if (displayAsset == null || destroyed) {
+            android.util.Log.w("NexaLodge", "QuestCraft CRT Display.glb was not resolved");
+            return;
+        }
+        try (InputStream in = assets.open(assetPath)) {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inPremultiplied = true;
+            Bitmap bitmap = BitmapFactory.decodeStream(in, null, options);
+            if (bitmap == null) throw new IllegalStateException("Unable to decode " + assetPath);
+
+            Texture texture = new Texture.Builder()
+                    .width(bitmap.getWidth())
+                    .height(bitmap.getHeight())
+                    .levels(1)
+                    .sampler(Texture.Sampler.SAMPLER_2D)
+                    .format(Texture.InternalFormat.SRGB8_A8)
+                    .build(engine);
+            TextureHelper.setBitmap(engine, texture, 0, bitmap);
+
+            TextureSampler sampler = new TextureSampler(
+                    TextureSampler.MinFilter.LINEAR,
+                    TextureSampler.MagFilter.LINEAR,
+                    TextureSampler.WrapMode.CLAMP_TO_EDGE);
+
+            MaterialInstance[] materials = displayAsset.getInstance().getMaterialInstances();
+            int applied = 0;
+            for (MaterialInstance material : materials) {
+                try {
+                    material.setParameter("baseColorMap", texture, sampler);
+                    material.setParameter("baseColorFactor", 1.0f, 1.0f, 1.0f, 1.0f);
+                    applied++;
+                } catch (Throwable ignored) {
+                    // Assimp/gltfio may select a material variant without a texture
+                    // parameter. Keep trying the other primitives instead of breaking
+                    // the room.
+                }
+            }
+            if (applied == 0) {
+                engine.destroyTexture(texture);
+                android.util.Log.w("NexaLodge", "CRT material exposes no baseColorMap parameter");
+                return;
+            }
+            if (crtMenuTexture != null) engine.destroyTexture(crtMenuTexture);
+            crtMenuTexture = texture;
+            android.util.Log.i("NexaLodge",
+                    "Applied original QuestCraft CRT menu texture: " + bitmap.getWidth()
+                            + "x" + bitmap.getHeight() + ", materials=" + applied);
+        } catch (Throwable t) {
+            android.util.Log.e("NexaLodge",
+                    "Unable to apply original QuestCraft CRT menu; lodge remains usable", t);
         }
     }
 
@@ -538,6 +606,11 @@ public final class NexaLodgeView extends TextureView
             try { EntityManager.get().destroy(entity); } catch (Throwable ignored) {}
         }
         lodgeLightEntities.clear();
+        if (crtMenuTexture != null) {
+            try { engine.destroyTexture(crtMenuTexture); } catch (Throwable ignored) {}
+            crtMenuTexture = null;
+        }
+        displayAsset = null;
         try { resourceLoader.destroy(); } catch (Throwable ignored) {}
         try { assetLoader.destroy(); } catch (Throwable ignored) {}
         try { materialProvider.destroyMaterials(); } catch (Throwable ignored) {}
