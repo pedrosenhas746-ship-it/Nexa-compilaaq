@@ -26,7 +26,7 @@ import pojlib.util.json.MinecraftInstances;
 public final class NexaQuestActivity extends UnityPlayerActivity {
     private static final String INSTANCE_NAME = "Nexa QuestCraft 1.20.4";
     private static final String MC_VERSION = "1.20.4";
-    private static final String BOOT_PREFS = "nexa_boot";
+    private static final String BOOT_STAGE_FILE = "nexa_boot_stage.txt";
 
     private final AtomicBoolean launching = new AtomicBoolean(false);
     private final AtomicBoolean loginRunning = new AtomicBoolean(false);
