@@ -1,12 +1,12 @@
-name: Build QuestCraft Nexa Vivecraft
+name: Build QuestCraft Nexa Vivecraft Phase 1.4
 
 on:
   workflow_dispatch:
   push:
     branches:
-      - questcraft-nexa-phase12-build
+      - questcraft-nexa-androidstudio
     paths:
-      - 'questcraft_nexa/vivecraft_phase12_overlay.tar.gz'
+      - 'questcraft_nexa/vivecraft/**'
       - 'questcraft_nexa/patch_vivecraft.py'
       - '.github/workflows/build-questcraft-nexa-vivecraft.yml'
 
@@ -32,23 +32,23 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Inject NexaVR
+      - name: Inject NexaVR Phase 1.4
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/nexa_phase12
-          mkdir -p /tmp/nexa_phase12
-          tar -xzf questcraft_nexa/vivecraft_phase12_overlay.tar.gz -C /tmp/nexa_phase12
           ROOT="$GITHUB_WORKSPACE/upstream/vivecraft"
-          SRC="/tmp/nexa_phase12/vivecraft/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
+          SRC="$GITHUB_WORKSPACE/questcraft_nexa/vivecraft/nexavr"
           DST="$ROOT/common/src/main/java/org/vivecraft/client_vr/provider/nexavr"
+          test -d "$SRC"
           mkdir -p "$DST"
           cp -f "$SRC"/*.java "$DST/"
           python3 questcraft_nexa/patch_vivecraft.py "$ROOT"
           test -f "$DST/NexaVR.java"
+          test -f "$DST/NexaTrackingReceiver.java"
+          test -f "$DST/NexaVRStereoRenderer.java"
           grep -Fq 'NEXA' "$ROOT/common/src/main/java/org/vivecraft/client_vr/settings/VRSettings.java"
-          grep -Fq 'new NexaVR(instance, dh)' "$ROOT/common/src/main/java/org/vivecraft/client_vr/VRState.java"
-          grep -Fq 'NexaLensDistortion.blitDual' "$ROOT/common/src/main/java/org/vivecraft/mixin/client_vr/MinecraftVRMixin.java"
+          grep -Fq 'MirrorMode.DUAL' "$ROOT/common/src/main/java/org/vivecraft/client_vr/settings/VRSettings.java"
+          grep -Fq 'case NEXA -> new NexaVR(instance, dh);' "$ROOT/common/src/main/java/org/vivecraft/client_vr/VRState.java"
 
       - name: Build Fabric JAR
         working-directory: upstream/vivecraft
@@ -74,7 +74,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: QuestCraft-Nexa-Vivecraft-Phase12
+          name: QuestCraft-Nexa-Vivecraft-Phase14
           path: |
             out/vivecraft/**
             vivecraft-build.log
