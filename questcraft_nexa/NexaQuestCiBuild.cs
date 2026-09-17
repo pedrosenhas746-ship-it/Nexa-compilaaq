@@ -20,7 +20,7 @@ namespace Nexa.Editor.CI
             PlayerSettings.bundleVersion = "0.1.2";
             PlayerSettings.Android.bundleVersionCode = 12;
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
-            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevel34;
+            PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64;
             PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { GraphicsDeviceType.OpenGLES3 });
             PlayerSettings.MTRendering = true;
