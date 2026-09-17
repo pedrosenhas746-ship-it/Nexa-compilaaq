@@ -1,0 +1,60 @@
+name: Extract Original QuestCraft Lodge
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - questcraft-nexa-androidstudio
+    paths:
+      - 'questcraft_nexa/room_converter/**'
+      - '.github/workflows/build-questcraft-room-manifest.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  extract-room:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/QCXR-XR-Wrapper
+          ref: CardboardCraft
+          path: upstream/qcxr
+          fetch-depth: 1
+
+      - name: Build Unity GUID index
+        run: |
+          set -euo pipefail
+          mkdir -p out/room
+          python3 questcraft_nexa/room_converter/guid_index.py \
+            upstream/qcxr/Assets \
+            out/room/guid-index.json
+
+      - name: Extract Main.unity room manifest
+        run: |
+          set -euo pipefail
+          python3 questcraft_nexa/room_converter/unity_scene_manifest.py \
+            upstream/qcxr/Assets/Scenes/Main.unity \
+            out/room/guid-index.json \
+            out/room/main-scene.json \
+            --report out/room/report.txt
+
+      - name: Verify original launcher anchors
+        run: |
+          set -euo pipefail
+          grep -Fq 'Play Button' out/room/main-scene.json
+          grep -Fq 'Assets/WinterLodge/' out/room/main-scene.json
+          echo 'Original Main.unity anchors found.'
+          cat out/room/report.txt
+
+      - name: Upload room manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestCraft-Original-Lodge-Manifest
+          path: out/room/**
+          if-no-files-found: error
+          retention-days: 14
