@@ -1,0 +1,155 @@
+name: Build NexaQuest Android Studio APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - questcraft-nexa-androidstudio
+    paths:
+      - 'questcraft_android/**'
+      - 'questcraft_nexa/**'
+      - '.github/workflows/build-nexaquest-androidstudio.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  VIVECRAFT_ARTIFACT_ID: '10516311970'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout Nexa source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install Android SDK and NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ANDROID_HOME="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" \
+            'platforms;android-35' \
+            'platforms;android-34' \
+            'build-tools;35.0.0' \
+            'build-tools;30.0.3' \
+            'platform-tools' \
+            'ndk;26.1.10909125'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          test -x "$ANDROID_HOME/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+
+      - name: Download validated Vivecraft Nexa JAR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/intermediate /tmp/vivecraft-artifact
+          curl -fL --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${VIVECRAFT_ARTIFACT_ID}/zip" \
+            -o /tmp/vivecraft.zip
+          unzip -q /tmp/vivecraft.zip -d /tmp/vivecraft-artifact
+          JAR="$(find /tmp/vivecraft-artifact -type f -name 'vivecraft-nexa-1.20.4-fabric.jar' -print -quit)"
+          test -s "$JAR"
+          cp "$JAR" out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
+
+      - name: Checkout Pojlib 6.0.0
+        uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/Pojlib
+          ref: QuestCraft-6.0.0
+          path: upstream/pojlib
+          submodules: recursive
+          lfs: true
+          fetch-depth: 1
+
+      - name: Patch and build native Pojlib AAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/upstream/pojlib"
+
+          cp questcraft_nexa/pojlib/NexaXRBridge.java "$ROOT/src/main/java/pojlib/NexaXRBridge.java"
+          cp questcraft_nexa/pojlib/NexaTrackingSurface.java "$ROOT/src/main/java/pojlib/NexaTrackingSurface.java"
+          cp questcraft_nexa/pojlib/NexaHandTracker.java "$ROOT/src/main/java/pojlib/NexaHandTracker.java"
+          cp questcraft_nexa/pojlib/NexaEmbeddedMods.java "$ROOT/src/main/java/pojlib/NexaEmbeddedMods.java"
+          python3 questcraft_nexa/patch_pojlib_androidstudio.py "$ROOT"
+
+          ASSETS="$ROOT/src/main/assets"
+          mkdir -p "$ASSETS/nexa"
+          cp out/intermediate/vivecraft-nexa-1.20.4-fabric.jar "$ASSETS/nexa/vivecraft-nexa-1.20.4-fabric.jar"
+          curl -fL --retry 4 \
+            'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task' \
+            -o "$ASSETS/hand_landmarker.task"
+
+          grep -Fq 'class UnityPlayerActivity extends ActivityGroup' "$ROOT/src/main/java/pojlib/UnityPlayerActivity.java"
+          if grep -Rq 'com.unity3d.player' "$ROOT/src/main/java"; then
+            echo 'Unity Java dependency still present'
+            grep -Rni 'com.unity3d.player' "$ROOT/src/main/java" || true
+            exit 40
+          fi
+          grep -Fq 'eglCreateWindowSurface' "$ROOT/src/main/jni/egl_bridge.c"
+          grep -Fq 'nativeSetSurface' "$ROOT/src/main/jni/egl_bridge.c"
+          grep -Fq '"NEXA"' "$ROOT/src/main/java/pojlib/util/json/MinecraftInstances.java"
+
+          cd "$ROOT"
+          chmod +x gradlew
+          ./gradlew clean assembleRelease --no-daemon --stacktrace
+          cd "$GITHUB_WORKSPACE"
+
+          AAR="$(find upstream/pojlib/build/outputs/aar -type f -name '*release*.aar' -print -quit)"
+          test -s "$AAR"
+          mkdir -p questcraft_android/app/libs
+          cp "$AAR" questcraft_android/app/libs/Pojlib-release.aar
+          unzip -l questcraft_android/app/libs/Pojlib-release.aar | grep -F 'assets/nexa/vivecraft-nexa-1.20.4-fabric.jar'
+          sha256sum questcraft_android/app/libs/Pojlib-release.aar
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Android Studio APK
+        working-directory: questcraft_android
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK='questcraft_android/app/build/outputs/apk/debug/app-debug.apk'
+          test -s "$APK"
+          mkdir -p out/final
+          cp "$APK" out/final/NexaQuest-AndroidStudio-1.2-debug.apk
+          sha256sum out/final/NexaQuest-AndroidStudio-1.2-debug.apk | tee out/final/NexaQuest-AndroidStudio-1.2-debug.apk.sha256
+          ls -lh out/final/NexaQuest-AndroidStudio-1.2-debug.apk
+
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NexaQuest-AndroidStudio-APK
+          path: |
+            out/final/**
+            questcraft_android/app/libs/Pojlib-release.aar
+            out/intermediate/vivecraft-nexa-1.20.4-fabric.jar
+          if-no-files-found: warn
+          retention-days: 14
