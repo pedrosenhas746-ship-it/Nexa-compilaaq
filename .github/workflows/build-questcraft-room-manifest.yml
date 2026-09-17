@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq assimp-utils
+          sudo apt-get install -y -qq assimp-utils python3-pil
           assimp version
 
       - name: Build Unity GUID index
@@ -128,6 +128,24 @@ jobs:
           for x in report:
               print(('OK  ' if x['exists'] else 'MISS') + ' ' + x['path'])
           PY
+
+      - name: Extract exact TextMesh Pro SDF atlases
+        run: |
+          set -euo pipefail
+          mkdir -p out/room/tmp_fonts
+          python3 questcraft_nexa/room_converter/extract_tmp_sdf.py \
+            'upstream/qcxr/Assets/Resources/UI/Sunflower-Bold SDF.asset' \
+            out/room/tmp_fonts --name sunflower-bold
+          python3 questcraft_nexa/room_converter/extract_tmp_sdf.py \
+            'upstream/qcxr/Assets/Resources/UI/Perfect DOS VGA 437 Win SDF.asset' \
+            out/room/tmp_fonts --name perfect-dos
+          python3 questcraft_nexa/room_converter/extract_tmp_sdf.py \
+            'upstream/qcxr/Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset' \
+            out/room/tmp_fonts --name liberation-sans
+          test -s out/room/tmp_fonts/sunflower-bold.png
+          test -s out/room/tmp_fonts/sunflower-bold.json
+          test -s out/room/tmp_fonts/perfect-dos.png
+          test -s out/room/tmp_fonts/liberation-sans.png
 
       - name: Verify original launcher anchors and hierarchy
         run: |
