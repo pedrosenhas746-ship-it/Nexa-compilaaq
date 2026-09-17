@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 /** Source-exact metadata extracted from QuestCraft CardboardCraft Main.unity. */
 public final class NexaRoomSpec {
     public static final String ASSET_PATH = "nexa/nexa-room.json";
-    public static final String EXPECTED_FORMAT = "nexa-questcraft-room-v1";
+    public static final String EXPECTED_FORMAT = "nexa-questcraft-room-v2";
     public static final String EXPECTED_SOURCE_COMMIT = "a8d46ea0db48d31015c1794bf5159a7b9c6edb4d";
 
     private final JsonObject root;
