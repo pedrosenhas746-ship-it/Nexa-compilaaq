@@ -101,6 +101,27 @@ jobs:
               })
           pathlib.Path('out/room/ui-assets-report.json').write_text(
               json.dumps(report,indent=2), encoding='utf-8')
+
+          # Preserve the exact public QCXR UI source assets for the native converter.
+          # Keeping .meta files lets us recover Unity sprite/font import metadata too.
+          import shutil
+          ui_root=pathlib.Path('out/room/ui_assets')
+          copied=0
+          for r in refs:
+              rel=r.get('path')
+              if not rel or rel.startswith('<'):
+                  continue
+              src=pathlib.Path('upstream/qcxr')/rel
+              if not src.is_file():
+                  continue
+              dst=ui_root/pathlib.Path(rel).relative_to('Assets')
+              dst.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copy2(src,dst)
+              copied+=1
+              meta=src.with_name(src.name+'.meta')
+              if meta.is_file():
+                  shutil.copy2(meta,dst.with_name(dst.name+'.meta'))
+          print('Copied original UI source assets:', copied)
           print('Original MainMenu objects:', p['object_count'])
           print('Original MainMenu canvas:', p.get('canvas_size'))
           print('Referenced UI assets:', len(refs))
