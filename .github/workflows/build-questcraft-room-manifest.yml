@@ -149,6 +149,21 @@ jobs:
           test -s out/room/tmp_fonts/perfect-dos.png
           test -s out/room/tmp_fonts/liberation-sans.png
 
+      - name: Render original QuestCraft CRT menu textures
+        run: |
+          set -euo pipefail
+          python3 questcraft_nexa/room_converter/render_mainmenu_textures.py \
+            out/room/nexa-mainmenu.json \
+            upstream/qcxr \
+            out/room/tmp_fonts \
+            out/room/rendered_ui \
+            --username 'Add Account' \
+            --minecraft-version '1.20.4'
+          test -s out/room/rendered_ui/source.png
+          test -s out/room/rendered_ui/start.png
+          test -s out/room/rendered_ui/main.png
+          test -s out/room/rendered_ui/hitboxes.json
+
       - name: Verify original launcher anchors and hierarchy
         run: |
           set -euo pipefail
