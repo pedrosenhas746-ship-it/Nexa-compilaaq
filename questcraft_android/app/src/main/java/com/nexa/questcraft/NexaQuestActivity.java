@@ -349,12 +349,12 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     }
 
     private void markBootStage(String stage, String detail) {
-        try {
-            getSharedPreferences(BOOT_PREFS, MODE_PRIVATE).edit()
-                    .putString("stage", stage)
-                    .putString("detail", detail == null ? "" : detail)
-                    .putLong("stage_time", System.currentTimeMillis())
-                    .apply();
+        java.io.File file = new java.io.File(getFilesDir(), BOOT_STAGE_FILE);
+        try (java.io.FileOutputStream out = new java.io.FileOutputStream(file, false)) {
+            String value = stage + "\n" + (detail == null ? "" : detail) + "\n"
+                    + System.currentTimeMillis() + "\n";
+            out.write(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            out.flush();
         } catch (Throwable ignored) { }
     }
 
