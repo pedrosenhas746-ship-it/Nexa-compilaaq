@@ -1,0 +1,179 @@
+name: Build QuestCraft Nexa Phase 1.2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ questcraft-nexa-phase12-build ]
+    paths:
+      - 'questcraft_nexa/**'
+      - '.github/workflows/build-questcraft-nexa-phase12.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-pojlib:
+    name: Build patched Pojlib AAR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout build overlay
+        uses: actions/checkout@v4
+
+      - name: Checkout QuestCraft Pojlib 6.0.0
+        uses: actions/checkout@v4
+        with:
+          repository: QuestCraftPlusPlus/Pojlib
+          ref: QuestCraft-6.0.0
+          path: upstream/pojlib
+          submodules: recursive
+          lfs: true
+          fetch-depth: 1
+
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up NDK r26b
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26b
+          local-cache: true
+          link-to-sdk: true
+
+      - name: Install Android packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager 'platforms;android-34' 'build-tools;30.0.3' 'platform-tools'
+
+      - name: Inject Nexa tracking into Pojlib
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/upstream/pojlib"
+          cp questcraft_nexa/pojlib/NexaXRBridge.java "$ROOT/src/main/java/pojlib/NexaXRBridge.java"
+          cp questcraft_nexa/pojlib/NexaTrackingSurface.java "$ROOT/src/main/java/pojlib/NexaTrackingSurface.java"
+          cp questcraft_nexa/pojlib/NexaHandTracker.java "$ROOT/src/main/java/pojlib/NexaHandTracker.java"
+
+          python3 - "$ROOT" <<'PY'
+          from pathlib import Path
+          import sys
+          root = Path(sys.argv[1])
+
+          activity = root / 'src/main/java/pojlib/UnityPlayerActivity.java'
+          s = activity.read_text(encoding='utf-8')
+
+          s = s.replace(
+              '    private Gamepad mGamepad = null;\n',
+              '    private Gamepad mGamepad = null;\n    private NexaTrackingSurface mNexaTracking;\n', 1)
+
+          s = s.replace(
+              '        mUnityPlayer.requestFocus();\n\n        updateWindowSize(this);',
+              '        mUnityPlayer.requestFocus();\n\n        mNexaTracking = new NexaTrackingSurface(this);\n        addContentView(mNexaTracking, new android.widget.FrameLayout.LayoutParams(2, 2));\n\n        updateWindowSize(this);', 1)
+
+          s = s.replace(
+              '    public boolean dispatchGenericMotionEvent(MotionEvent event) {\n',
+              '    public boolean dispatchGenericMotionEvent(MotionEvent event) {\n        NexaXRBridge.onMotionEvent(event);\n', 1)
+
+          s = s.replace(
+              '    public boolean dispatchKeyEvent(KeyEvent event) {\n',
+              '    public boolean dispatchKeyEvent(KeyEvent event) {\n        NexaXRBridge.onKeyEvent(event);\n', 1)
+
+          s = s.replace(
+              '    @Override protected void onDestroy ()\n    {\n        mUnityPlayer.destroy();',
+              '    @Override protected void onDestroy ()\n    {\n        if (mNexaTracking != null) mNexaTracking.shutdown();\n        mUnityPlayer.destroy();', 1)
+
+          s = s.replace(
+              '    @Override protected void onPause()\n    {\n        super.onPause();\n\n        mUnityPlayer.pause();',
+              '    @Override protected void onPause()\n    {\n        if (mNexaTracking != null) mNexaTracking.onPause();\n        super.onPause();\n\n        mUnityPlayer.pause();', 1)
+
+          s = s.replace(
+              '    @Override protected void onResume()\n    {\n        super.onResume();\n\n        mUnityPlayer.resume();\n    }',
+              '    @Override protected void onResume()\n    {\n        super.onResume();\n\n        mUnityPlayer.resume();\n        if (mNexaTracking != null) mNexaTracking.onResume();\n    }\n\n    @Override\n    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {\n        super.onRequestPermissionsResult(requestCode, permissions, grantResults);\n        if (requestCode == NexaTrackingSurface.CAMERA_REQUEST && mNexaTracking != null) {\n            mNexaTracking.onResume();\n        }\n    }', 1)
+
+          required = [
+              'NexaXRBridge.onMotionEvent(event);',
+              'NexaXRBridge.onKeyEvent(event);',
+              'new NexaTrackingSurface(this)',
+              'mNexaTracking.shutdown()',
+          ]
+          missing = [x for x in required if x not in s]
+          if missing:
+              raise SystemExit('Activity patch failed, missing: ' + ', '.join(missing))
+          activity.write_text(s, encoding='utf-8')
+
+          gradle = root / 'build.gradle'
+          g = gradle.read_text(encoding='utf-8')
+          anchor = 'dependencies {\n    implementation("org.jetbrains:annotations:24.0.1")'
+          if anchor not in g:
+              raise SystemExit('build.gradle dependency anchor missing')
+          g = g.replace(anchor, 'dependencies {\n    implementation("com.google.ar:core:1.45.0")\n    implementation("com.google.mediapipe:tasks-vision:0.10.14")\n    implementation("org.jetbrains:annotations:24.0.1")', 1)
+          gradle.write_text(g, encoding='utf-8')
+
+          manifest = root / 'src/main/AndroidManifest.xml'
+          m = manifest.read_text(encoding='utf-8')
+          m = m.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    package="pojlib.android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android"\n    package="pojlib.android">\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="true" />\n    <uses-feature android:name="android.hardware.camera.ar" android:required="false" />', 1)
+          manifest.write_text(m, encoding='utf-8')
+          PY
+
+      - name: Download MediaPipe hand model
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSETS="$GITHUB_WORKSPACE/upstream/pojlib/src/main/assets"
+          mkdir -p "$ASSETS"
+          curl -fL --retry 4 --retry-delay 2 \
+            'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task' \
+            -o "$ASSETS/hand_landmarker.task"
+          test -s "$ASSETS/hand_landmarker.task"
+          ls -lh "$ASSETS/hand_landmarker.task"
+
+      - name: Preflight patched sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="$GITHUB_WORKSPACE/upstream/pojlib"
+          grep -Fq 'NexaXRBridge.onMotionEvent(event);' "$ROOT/src/main/java/pojlib/UnityPlayerActivity.java"
+          grep -Fq 'NexaTrackingSurface' "$ROOT/src/main/java/pojlib/UnityPlayerActivity.java"
+          grep -Fq 'FacingDirection.BACK' "$ROOT/src/main/java/pojlib/NexaTrackingSurface.java"
+          grep -Fq 'tasks-vision:0.10.14' "$ROOT/build.gradle"
+          test -s "$ROOT/src/main/assets/hand_landmarker.task"
+
+      - name: Build Pojlib debug AAR
+        working-directory: upstream/pojlib
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew clean assembleDebug --stacktrace --no-daemon --warning-mode all | tee "$GITHUB_WORKSPACE/pojlib-build.log"
+
+      - name: Verify AAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          AAR="$(find upstream/pojlib/build/outputs/aar -type f -name '*debug*.aar' -print -quit)"
+          test -n "$AAR"
+          test -s "$AAR"
+          mkdir -p out
+          cp "$AAR" out/pojlib-nexa-phase12-debug.aar
+          unzip -l out/pojlib-nexa-phase12-debug.aar | tee out/aar-contents.txt
+          sha256sum out/pojlib-nexa-phase12-debug.aar | tee out/pojlib-nexa-phase12-debug.aar.sha256
+
+      - name: Upload Pojlib build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuestCraft-Nexa-Pojlib-Phase12
+          path: |
+            out/**
+            pojlib-build.log
+          if-no-files-found: warn
+          retention-days: 14
