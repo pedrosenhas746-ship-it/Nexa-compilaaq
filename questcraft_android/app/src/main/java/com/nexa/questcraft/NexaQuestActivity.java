@@ -26,6 +26,7 @@ import pojlib.util.json.MinecraftInstances;
 public final class NexaQuestActivity extends UnityPlayerActivity {
     private static final String INSTANCE_NAME = "Nexa QuestCraft 1.20.4";
     private static final String MC_VERSION = "1.20.4";
+    private static final String BOOT_PREFS = "nexa_boot";
 
     private final AtomicBoolean launching = new AtomicBoolean(false);
     private final AtomicBoolean loginRunning = new AtomicBoolean(false);
@@ -36,8 +37,35 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        buildLodgeUi();
+        markBootStage("runtime_oncreate_entered", "");
+        installCrashRecorder();
+
+        try {
+            super.onCreate(savedInstanceState);
+        } catch (Throwable t) {
+            markBootStage("runtime_super_error", shortMessage(t));
+            showFatalFallback("Falha ao inicializar o runtime Android/Pojlib", t);
+            return;
+        }
+
+        markBootStage(
+                "runtime_super_ok",
+                isPojavNativeReady() ? "pojavexec ready" : getPojavNativeError());
+
+        try {
+            buildLodgeUi();
+            markBootStage(
+                    "lodge_ready",
+                    isPojavNativeReady() ? "runtime native ready" : "runtime native disabled: " + getPojavNativeError());
+        } catch (Throwable t) {
+            markBootStage("lodge_error", shortMessage(t));
+            showFatalFallback("Falha ao abrir a sala do QuestCraft", t);
+            return;
+        }
+
+        if (!isPojavNativeReady()) {
+            showStatus("NEXA abriu, mas o runtime Minecraft nao carregou: " + getPojavNativeError());
+        }
         watchLoginState();
     }
 
@@ -118,6 +146,10 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
 
     private void activatePrimaryAction() {
         if (launching.get()) return;
+        if (!isPojavNativeReady()) {
+            showStatus("Runtime Minecraft indisponivel: " + getPojavNativeError());
+            return;
+        }
         if (API.currentAcc == null) {
             beginLogin();
         } else {
@@ -300,6 +332,46 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
         if (statusBanner != null) statusBanner.removeCallbacks(hideStatusRunnable);
         if (lodgeView != null) lodgeView.destroyRenderer();
         super.onDestroy();
+    }
+
+    private void installCrashRecorder() {
+        final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            try {
+                markBootStage("runtime_uncaught_crash", shortMessage(error));
+            } catch (Throwable ignored) { }
+            if (previous != null) {
+                previous.uncaughtException(thread, error);
+            } else {
+                android.os.Process.killProcess(android.os.Process.myPid());
+            }
+        });
+    }
+
+    private void markBootStage(String stage, String detail) {
+        try {
+            getSharedPreferences(BOOT_PREFS, MODE_PRIVATE).edit()
+                    .putString("stage", stage)
+                    .putString("detail", detail == null ? "" : detail)
+                    .putLong("stage_time", System.currentTimeMillis())
+                    .apply();
+        } catch (Throwable ignored) { }
+    }
+
+    private void showFatalFallback(String title, Throwable error) {
+        try {
+            TextView fatal = new TextView(this);
+            fatal.setTextColor(Color.WHITE);
+            fatal.setBackgroundColor(Color.rgb(4, 8, 14));
+            fatal.setTextSize(18f);
+            fatal.setGravity(Gravity.CENTER);
+            fatal.setPadding(40, 40, 40, 40);
+            fatal.setText("NEXA QUESTCRAFT\n\n" + title + "\n\n" + shortMessage(error)
+                    + "\n\nVolte e toque em TENTAR NOVAMENTE para repetir.");
+            setContentView(fatal);
+        } catch (Throwable ignored) {
+            finish();
+        }
     }
 
     private static String shortMessage(Throwable t) {
