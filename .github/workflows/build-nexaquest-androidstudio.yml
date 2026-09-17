@@ -145,6 +145,18 @@ jobs:
             questcraft_android/app/src/main/assets/nexa/ui/fonts/LiberationSans.ttf
           test -s questcraft_android/app/src/main/assets/nexa/ui/fonts/sunflower-bold.png
           test -s questcraft_android/app/src/main/assets/nexa/ui/fonts/sunflower-bold.json
+          mkdir -p questcraft_android/app/src/main/assets/nexa/ui/rendered
+          python3 questcraft_nexa/room_converter/render_mainmenu_textures.py \
+            questcraft_android/app/src/main/assets/nexa/nexa-mainmenu.json \
+            upstream/qcxr-room \
+            questcraft_android/app/src/main/assets/nexa/ui/fonts \
+            questcraft_android/app/src/main/assets/nexa/ui/rendered \
+            --username 'Add Account' \
+            --minecraft-version '1.20.4'
+          test -s questcraft_android/app/src/main/assets/nexa/ui/rendered/source.png
+          test -s questcraft_android/app/src/main/assets/nexa/ui/rendered/start.png
+          test -s questcraft_android/app/src/main/assets/nexa/ui/rendered/main.png
+          test -s questcraft_android/app/src/main/assets/nexa/ui/rendered/hitboxes.json
           python3 - <<'PY'
           import json
           p=json.load(open('questcraft_android/app/src/main/assets/nexa/nexa-room.json'))
@@ -264,6 +276,8 @@ jobs:
           unzip -l "$APK" | grep -F 'assets/nexa/ui/MainButton.png'
           unzip -l "$APK" | grep -F 'assets/nexa/ui/fonts/sunflower-bold.png'
           unzip -l "$APK" | grep -F 'assets/nexa/ui/fonts/sunflower-bold.json'
+          unzip -l "$APK" | grep -F 'assets/nexa/ui/rendered/main.png'
+          unzip -l "$APK" | grep -F 'assets/nexa/ui/rendered/hitboxes.json'
           unzip -l "$APK" | grep -F 'assets/nexa/licenses/QCXR-GPL-3.0.txt'
           test "$(unzip -Z1 "$APK" | grep -Ec '^assets/nexa/lodge_models/.*\.glb$')" -eq 8
           mkdir -p out/final
