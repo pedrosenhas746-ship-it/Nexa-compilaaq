@@ -100,7 +100,9 @@ jobs:
             --report out/room/report.txt
           python3 questcraft_nexa/room_converter/build_native_room_spec.py \
             out/room/main-scene.json upstream/qcxr-room \
-            questcraft_android/app/src/main/assets/nexa/nexa-room.json
+            questcraft_android/app/src/main/assets/nexa/nexa-room.json \
+            --source-commit "$QCXR_ROOM_COMMIT" \
+            --source-branch CardboardCraft
           python3 questcraft_nexa/room_converter/extract_main_menu_ui.py \
             upstream/qcxr-room/Assets/Scenes/Main.unity \
             out/room/guid-index.json \
