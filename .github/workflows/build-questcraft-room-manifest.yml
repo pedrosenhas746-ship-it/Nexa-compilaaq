@@ -171,7 +171,7 @@ jobs:
           grep -Fq 'Assets/QCWorld/QCWorld.obj' out/room/nexa-room.json
           grep -Fq 'Assets/WinterLodge/Bear/Bear.fbx' out/room/nexa-room.json
           python3 - <<'PY'
-          import json, pathlib
+          import json, pathlib, os
           p=json.load(open('out/room/nexa-room.json'))
           assert p['format'] == 'nexa-questcraft-room-v2'
           assert p['source']['commit'] == os.environ['QCXR_ROOM_COMMIT']
