@@ -37,8 +37,11 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -130,6 +133,7 @@ public final class NexaLodgeView extends TextureView
     private boolean running;
     private boolean destroyed;
     private boolean roomLoaded;
+    private boolean firstFrameMarked;
 
     private final float[] cameraAnchorPos = DEFAULT_CAMERA_POS.clone();
     private final float[] cameraAnchorRot = DEFAULT_CAMERA_ROT.clone();
@@ -146,7 +150,9 @@ public final class NexaLodgeView extends TextureView
         setOpaque(true);
         assets = context.getAssets();
 
-        engine = Engine.create();
+        // Force GLES/OpenGL on phone VR. AUTO may select Vulkan on some
+        // devices while Pojlib/LWJGL is an EGL/OpenGL runtime.
+        engine = Engine.create(Engine.Backend.OPENGL);
         renderer = engine.createRenderer();
         scene = engine.createScene();
         view = engine.createView();
@@ -209,11 +215,16 @@ public final class NexaLodgeView extends TextureView
     @Override
     public void doFrame(long frameTimeNanos) {
         if (!running || destroyed) return;
+        if (!firstFrameMarked) {
+            firstFrameMarked = true;
+            markBootStage("lodge_first_frame_begin", "filament-opengl");
+        }
         updateTrackedCamera();
         updateHandMenu();
         if (uiHelper.isReadyToRender() && swapChain != null && renderer.beginFrame(swapChain, frameTimeNanos)) {
             renderer.render(view);
             renderer.endFrame();
+            if (roomLoaded) markBootStage("lodge_frame_rendered", "room-loaded");
         }
         if (running && !destroyed) Choreographer.getInstance().postFrameCallback(this);
     }
@@ -250,8 +261,10 @@ public final class NexaLodgeView extends TextureView
 
     private void loadRoomOnce() {
         if (destroyed || roomLoaded) return;
+        markBootStage("lodge_room_load_begin", "filament-opengl");
         try {
             JSONObject spec = new JSONObject(readTextAsset("nexa/nexa-room.json"));
+            markBootStage("lodge_room_spec_ok", "");
             resolveOriginalCamera(spec);
 
             List<JSONObject> modelSpecs = new ArrayList<>();
@@ -264,7 +277,9 @@ public final class NexaLodgeView extends TextureView
             Map<Long, ModelNode> bySceneId = new HashMap<>();
             for (JSONObject item : modelSpecs) {
                 String runtimeModel = item.getString("runtime_model");
+                markBootStage("lodge_loading_model", runtimeModel);
                 FilamentAsset asset = loadGlb(runtimeModel);
+                markBootStage("lodge_model_ok", runtimeModel);
                 JSONObject source = item.optJSONObject("source");
                 if (source != null
                         && "Assets/WinterLodge/Reality Display/Display.obj".equals(source.optString("path"))) {
@@ -302,9 +317,25 @@ public final class NexaLodgeView extends TextureView
             loadOriginalLights(spec);
             roomLoaded = true;
             applyCamera(cameraAnchorPos, cameraAnchorRot);
+            markBootStage("lodge_room_loaded", "8 models");
         } catch (Throwable t) {
+            markBootStage("lodge_room_java_error",
+                    t.getClass().getSimpleName() + ": " + String.valueOf(t.getMessage()));
             android.util.Log.e("NexaLodge", "Unable to load original QuestCraft lodge", t);
         }
+    }
+
+    private void markBootStage(String stage, String detail) {
+        try {
+            File file = new File(getContext().getFilesDir(), "nexa_boot_stage.txt");
+            try (FileOutputStream out = new FileOutputStream(file, false)) {
+                String safe = detail == null ? "" : detail.replace('\n', ' ').replace('\r', ' ');
+                String value = stage + "\n" + safe + "\n"
+                        + System.currentTimeMillis() + "\n";
+                out.write(value.getBytes(StandardCharsets.UTF_8));
+                out.flush();
+            }
+        } catch (Throwable ignored) { }
     }
 
     private void applyCrtMenuTexture(String assetPath) {
