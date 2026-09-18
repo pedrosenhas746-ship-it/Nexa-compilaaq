@@ -70,6 +70,10 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
     private volatile boolean pojavNativeReady;
     private volatile String pojavNativeError = "";
+    // The launcher lodge owns the GPU until Play is pressed. Binding Pojlib's
+    // EGL window during lodge startup caused two unrelated native renderers to
+    // fight over window/EGL state on some Android GPU drivers.
+    private volatile boolean minecraftSurfaceEnabled;
 
     protected final boolean isPojavNativeReady() { return pojavNativeReady; }
     protected final String getPojavNativeError() { return pojavNativeError; }
@@ -121,26 +125,18 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
         minecraftSurface.getHolder().addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder holder) {
-                if (!pojavNativeReady) return;
-                try {
-                    nativeSetSurface(holder.getSurface(), Math.max(1, minecraftSurface.getWidth()), Math.max(1, minecraftSurface.getHeight()));
-                } catch (Throwable t) {
-                    pojavNativeReady = false;
-                    pojavNativeError = "surfaceCreated: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
-                }
+                if (!pojavNativeReady || !minecraftSurfaceEnabled) return;
+                bindMinecraftSurface(holder.getSurface(),
+                        Math.max(1, minecraftSurface.getWidth()),
+                        Math.max(1, minecraftSurface.getHeight()));
             }
             @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-                if (!pojavNativeReady) return;
-                try {
-                    nativeSetSurface(holder.getSurface(), Math.max(1, width), Math.max(1, height));
-                    CallbackBridge.sendUpdateWindowSize(Math.max(1, width), Math.max(1, height));
-                } catch (Throwable t) {
-                    pojavNativeReady = false;
-                    pojavNativeError = "surfaceChanged: " + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
-                }
+                CallbackBridge.sendUpdateWindowSize(Math.max(1, width), Math.max(1, height));
+                if (!pojavNativeReady || !minecraftSurfaceEnabled) return;
+                bindMinecraftSurface(holder.getSurface(), Math.max(1, width), Math.max(1, height));
             }
             @Override public void surfaceDestroyed(SurfaceHolder holder) {
-                if (!pojavNativeReady) return;
+                if (!pojavNativeReady || !minecraftSurfaceEnabled) return;
                 try { nativeClearSurface(); } catch (Throwable ignored) { }
             }
         });
@@ -172,6 +168,36 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
     public FrameLayout getRootLayout() { return rootLayout; }
     public SurfaceView getMinecraftSurface() { return minecraftSurface; }
+
+    private void bindMinecraftSurface(Surface surface, int width, int height) {
+        if (surface == null || !surface.isValid() || !pojavNativeReady) return;
+        try {
+            nativeSetSurface(surface, Math.max(1, width), Math.max(1, height));
+            CallbackBridge.sendUpdateWindowSize(Math.max(1, width), Math.max(1, height));
+        } catch (Throwable t) {
+            pojavNativeReady = false;
+            pojavNativeError = "bind surface: "
+                    + (t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage());
+        }
+    }
+
+    public final void activateMinecraftSurface() {
+        if (!pojavNativeReady) return;
+        minecraftSurfaceEnabled = true;
+        SurfaceHolder holder = minecraftSurface.getHolder();
+        bindMinecraftSurface(holder.getSurface(),
+                Math.max(1, minecraftSurface.getWidth()),
+                Math.max(1, minecraftSurface.getHeight()));
+    }
+
+    public final void deactivateMinecraftSurface() {
+        minecraftSurfaceEnabled = false;
+        if (pojavNativeReady) {
+            try { nativeClearSurface(); } catch (Throwable ignored) { }
+        }
+    }
+
+    public final boolean isMinecraftSurfaceEnabled() { return minecraftSurfaceEnabled; }
 
     public static native void nativeSetSurface(Surface surface, int width, int height);
     public static native void nativeClearSurface();
@@ -303,9 +329,7 @@ public class UnityPlayerActivity extends ActivityGroup implements GrabListener {
 
     @Override protected void onDestroy() {
         if (nexaTracking != null) nexaTracking.shutdown();
-        if (pojavNativeReady) {
-            try { nativeClearSurface(); } catch (Throwable ignored) { }
-        }
+        deactivateMinecraftSurface();
         super.onDestroy();
     }
 
