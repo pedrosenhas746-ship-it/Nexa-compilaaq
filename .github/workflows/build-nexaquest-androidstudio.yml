@@ -288,8 +288,17 @@ jobs:
           unzip -l "$APK" | grep -F 'lib/arm64-v8a/libjrelauncher.so'
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "$APK" > /tmp/nexa-manifest.xml
           grep -Fq 'com.nexa.questcraft.BootstrapActivity' /tmp/nexa-manifest.xml
+          grep -Fq 'com.nexa.questcraft.RuntimeProbeActivity' /tmp/nexa-manifest.xml
           grep -Fq 'com.nexa.questcraft.NexaQuestActivity' /tmp/nexa-manifest.xml
           grep -Fq 'android:process=":runtime"' /tmp/nexa-manifest.xml
+          rm -rf /tmp/nexa-native-check
+          mkdir -p /tmp/nexa-native-check
+          unzip -q "$APK" 'lib/arm64-v8a/libpojavexec.so' 'lib/arm64-v8a/libjrelauncher.so' -d /tmp/nexa-native-check
+          for SO in libpojavexec.so libjrelauncher.so; do
+            echo "Checking 16KB ELF alignment: $SO"
+            readelf -Wl "/tmp/nexa-native-check/lib/arm64-v8a/$SO" | grep ' LOAD '
+            test "$(readelf -Wl "/tmp/nexa-native-check/lib/arm64-v8a/$SO" | awk '/ LOAD / {print $NF}' | sort -u)" = "0x4000"
+          done
           python3 - <<'PY'
           from pathlib import Path
           s=Path('questcraft_nexa/patch_pojlib_androidstudio.py').read_text()
@@ -298,7 +307,7 @@ jobs:
           PY
           mkdir -p out/final
           cp /tmp/nexa-manifest.xml out/final/AndroidManifest-decoded.xml
-          OUT='out/final/NexaQuest-AndroidStudio-1.4.4-BOOTFIX-debug.apk'
+          OUT='out/final/NexaQuest-AndroidStudio-1.4.6-RUNTIMEPROBE-debug.apk'
           cp "$APK" "$OUT"
           sha256sum "$OUT" | tee "$OUT.sha256"
           ls -lh "$OUT"
