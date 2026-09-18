@@ -288,13 +288,28 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
             API.prelaunch(this, all, instance);
             API.currentInstance = instance;
 
+            java.util.concurrent.CountDownLatch surfaceLatch =
+                    new java.util.concurrent.CountDownLatch(1);
             runOnUiThread(() -> {
-                hideStatus();
-                if (lodgeView != null) {
-                    lodgeView.pauseRendering();
-                    lodgeView.setVisibility(View.GONE);
+                try {
+                    hideStatus();
+                    if (lodgeView != null) {
+                        lodgeView.pauseRendering();
+                        lodgeView.setVisibility(View.GONE);
+                    }
+                    // Pojlib's EGL window is intentionally kept OFF while the
+                    // original QuestCraft lodge is being rendered.
+                    activateMinecraftSurface();
+                } finally {
+                    surfaceLatch.countDown();
                 }
             });
+            if (!surfaceLatch.await(1500L, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                throw new IllegalStateException("Minecraft surface activation timeout");
+            }
+            if (!isPojavNativeReady()) {
+                throw new IllegalStateException("Minecraft surface: " + getPojavNativeError());
+            }
 
             API.launchInstance(this, API.currentAcc, instance);
         } catch (Throwable t) {
@@ -304,6 +319,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
 
     private void fail(String value) {
         launching.set(false);
+        deactivateMinecraftSurface();
         runOnUiThread(() -> {
             if (lodgeView != null) {
                 lodgeView.setVisibility(View.VISIBLE);
