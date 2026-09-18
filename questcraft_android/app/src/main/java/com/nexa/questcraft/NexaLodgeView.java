@@ -134,6 +134,7 @@ public final class NexaLodgeView extends TextureView
     private boolean destroyed;
     private boolean roomLoaded;
     private boolean firstFrameMarked;
+    private boolean firstRoomFrameMarked;
 
     private final float[] cameraAnchorPos = DEFAULT_CAMERA_POS.clone();
     private final float[] cameraAnchorRot = DEFAULT_CAMERA_ROT.clone();
@@ -224,7 +225,10 @@ public final class NexaLodgeView extends TextureView
         if (uiHelper.isReadyToRender() && swapChain != null && renderer.beginFrame(swapChain, frameTimeNanos)) {
             renderer.render(view);
             renderer.endFrame();
-            if (roomLoaded) markBootStage("lodge_frame_rendered", "room-loaded");
+            if (roomLoaded && !firstRoomFrameMarked) {
+                firstRoomFrameMarked = true;
+                markBootStage("lodge_frame_rendered", "room-loaded");
+            }
         }
         if (running && !destroyed) Choreographer.getInstance().postFrameCallback(this);
     }
