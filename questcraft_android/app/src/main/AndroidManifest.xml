@@ -31,6 +31,12 @@
         </activity>
 
         <activity
+            android:name=".RuntimeProbeActivity"
+            android:exported="false"
+            android:process=":runtime"
+            android:screenOrientation="landscape" />
+
+        <activity
             android:name=".NexaQuestActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="false"
