@@ -410,4 +410,14 @@ if insert.strip() not in e:
     e = e.replace(marker, insert + marker)
 egl.write_text(e, encoding='utf-8')
 
+
+# Android 15+ devices may use a 16 KiB memory page size. Pojlib 6.0.0
+# originally links our native modules with 4 KiB PT_LOAD alignment. Build the
+# Nexa-owned native libraries with flexible 16 KiB-compatible ELF segments.
+appmk = root / 'src/main/jni/Application.mk'
+am = appmk.read_text(encoding='utf-8')
+if 'max-page-size=16384' not in am:
+    am = am.rstrip() + '\nAPP_LDFLAGS += -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384\n'
+appmk.write_text(am, encoding='utf-8')
+
 print('Pojlib patched for native Android Studio / Nexa runtime')
