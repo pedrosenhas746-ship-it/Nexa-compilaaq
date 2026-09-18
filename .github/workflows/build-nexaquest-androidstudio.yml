@@ -307,7 +307,7 @@ jobs:
           PY
           mkdir -p out/final
           cp /tmp/nexa-manifest.xml out/final/AndroidManifest-decoded.xml
-          OUT='out/final/NexaQuest-AndroidStudio-1.4.6-RUNTIMEPROBE-debug.apk'
+          OUT='out/final/NexaQuest-AndroidStudio-1.4.7-EGLISOLATION-debug.apk'
           cp "$APK" "$OUT"
           sha256sum "$OUT" | tee "$OUT.sha256"
           ls -lh "$OUT"
