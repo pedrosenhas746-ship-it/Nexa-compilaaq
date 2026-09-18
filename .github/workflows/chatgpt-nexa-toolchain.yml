@@ -1,0 +1,47 @@
+name: ChatGPT Nexa Android Toolchain
+
+on:
+  push:
+    branches: [ chatgpt-nexa-compile-tools ]
+    paths:
+      - '.github/workflows/chatgpt-nexa-toolchain.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Download apktool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          curl -fL --retry 4 --retry-delay 2             'https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar'             -o out/apktool.jar
+          echo 'dbf930b076c6b9be08d57c449cacefc3bdd6b71ebd59b3066fc0e1f5b14f9423  out/apktool.jar' | sha256sum -c -
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" out/build-tools-35.0.0
+          cp "$ANDROID_HOME/platforms/android-35/android.jar" out/android-35.jar
+          tar -C out -czf nexa-android-toolchain.tar.gz apktool.jar build-tools-35.0.0 android-35.jar
+          sha256sum nexa-android-toolchain.tar.gz > nexa-android-toolchain.tar.gz.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nexa-android-toolchain
+          path: |
+            nexa-android-toolchain.tar.gz
+            nexa-android-toolchain.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
