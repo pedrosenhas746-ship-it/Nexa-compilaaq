@@ -102,7 +102,7 @@ public final class BootstrapActivity extends Activity {
             Intent intent = new Intent();
             intent.setComponent(new ComponentName(
                     getPackageName(),
-                    "com.nexa.questcraft.NexaQuestActivity"));
+                    "com.nexa.questcraft.RuntimeProbeActivity"));
             intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION);
             startActivity(intent);
             overridePendingTransition(0, 0);
