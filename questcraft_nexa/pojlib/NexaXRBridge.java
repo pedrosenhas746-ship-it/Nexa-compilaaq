@@ -29,6 +29,8 @@ public final class NexaXRBridge {
     private static final float[] HEAD = new float[]{0, 1.62f, 0, 0, 0, 0, 1};
     private static final float[] JOINTS = new float[126]; // 2 * 21 * xyz
     private static final float[] PINCH = new float[8];
+    /** Local-only PhoneXR-style cursor points: RIGHT x/y, LEFT x/y. Not added to UDP v1. */
+    private static final float[] CURSOR = new float[]{-1f, -1f, -1f, -1f};
     private static int validHands;
     private static boolean headTracked;
     private static long trackingTimestampMs;
@@ -65,15 +67,17 @@ public final class NexaXRBridge {
         public final float[] head;
         public final float[] joints;
         public final float[] pinch;
+        public final float[] cursor;
 
         LocalSnapshot(boolean headTracked, long trackingTimestampMs, int validHands,
-                      float[] head, float[] joints, float[] pinch) {
+                      float[] head, float[] joints, float[] pinch, float[] cursor) {
             this.headTracked = headTracked;
             this.trackingTimestampMs = trackingTimestampMs;
             this.validHands = validHands;
             this.head = head;
             this.joints = joints;
             this.pinch = pinch;
+            this.cursor = cursor;
         }
     }
 
@@ -85,7 +89,8 @@ public final class NexaXRBridge {
                     validHands,
                     HEAD.clone(),
                     JOINTS.clone(),
-                    PINCH.clone());
+                    PINCH.clone(),
+                    CURSOR.clone());
         }
     }
 
@@ -110,6 +115,11 @@ public final class NexaXRBridge {
 
     public static void updateTracking(boolean tracked, float[] head, int handMask,
                                       float[] joints, float[] pinch, long timestampMs) {
+        updateTracking(tracked, head, handMask, joints, pinch, null, timestampMs);
+    }
+
+    public static void updateTracking(boolean tracked, float[] head, int handMask,
+                                      float[] joints, float[] pinch, float[] cursor, long timestampMs) {
         start();
         synchronized (LOCK) {
             headTracked = tracked;
@@ -118,6 +128,8 @@ public final class NexaXRBridge {
             if (head != null && head.length >= 7) System.arraycopy(head, 0, HEAD, 0, 7);
             if (joints != null && joints.length >= 126) System.arraycopy(joints, 0, JOINTS, 0, 126);
             if (pinch != null && pinch.length >= 8) System.arraycopy(pinch, 0, PINCH, 0, 8);
+            if (cursor != null && cursor.length >= 4) System.arraycopy(cursor, 0, CURSOR, 0, 4);
+            else Arrays.fill(CURSOR, -1f);
         }
         sendLatest();
     }
