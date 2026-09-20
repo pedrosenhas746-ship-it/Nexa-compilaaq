@@ -32,6 +32,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     private final AtomicBoolean loginRunning = new AtomicBoolean(false);
 
     private NexaLodgeView lodgeView;
+    private NexaPinchCursorView pinchCursorView;
     private TextView statusBanner;
     private volatile String lastMsaMessage = "";
 
@@ -85,6 +86,20 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
 
         // Useful when testing without the phone inside the VRBox.
         lodgeView.setOnClickListener(v -> activatePrimaryAction());
+
+        // PhoneXR-style cursor: white orb between thumb/index; closing the pinch
+        // activates the Nexa menu item already under the hand ray.
+        pinchCursorView = new NexaPinchCursorView(this);
+        pinchCursorView.setPinchListener((hand, x, y) -> {
+            if (lodgeView == null || lodgeView.getVisibility() != View.VISIBLE) return;
+            String hovered = lodgeView.getHoveredMenuButton();
+            if (hovered != null) onLodgeMenuAction(hovered);
+        });
+        getRootLayout().addView(
+                pinchCursorView,
+                new FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT));
 
         statusBanner = new TextView(this);
         statusBanner.setTextColor(Color.WHITE);
@@ -335,10 +350,12 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
         if (lodgeView != null && lodgeView.getVisibility() == View.VISIBLE) {
             lodgeView.resumeRendering();
         }
+        if (pinchCursorView != null) pinchCursorView.resume();
     }
 
     @Override
     protected void onPause() {
+        if (pinchCursorView != null) pinchCursorView.pause();
         if (lodgeView != null) lodgeView.pauseRendering();
         super.onPause();
     }
@@ -346,6 +363,7 @@ public final class NexaQuestActivity extends UnityPlayerActivity {
     @Override
     protected void onDestroy() {
         if (statusBanner != null) statusBanner.removeCallbacks(hideStatusRunnable);
+        if (pinchCursorView != null) pinchCursorView.destroy();
         if (lodgeView != null) lodgeView.destroyRenderer();
         super.onDestroy();
     }
