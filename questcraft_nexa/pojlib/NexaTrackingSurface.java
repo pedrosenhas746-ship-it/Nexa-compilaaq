@@ -143,6 +143,7 @@ public final class NexaTrackingSurface extends GLSurfaceView implements GLSurfac
                     hf.validMask,
                     hf.joints,
                     hf.pinch,
+                    hf.cursor,
                     SystemClock.uptimeMillis());
         } catch (Throwable ignored) {
         }
