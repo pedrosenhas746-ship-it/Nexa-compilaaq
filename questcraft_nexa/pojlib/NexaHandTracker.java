@@ -30,14 +30,17 @@ import java.util.List;
 
 public final class NexaHandTracker implements AutoCloseable {
     public static final class HandFrame {
-        public static final HandFrame EMPTY = new HandFrame(0, new float[126], ones());
+        public static final HandFrame EMPTY = new HandFrame(0, new float[126], ones(), hiddenCursors());
         public final int validMask;
         public final float[] joints;
         public final float[] pinch;
-        HandFrame(int validMask, float[] joints, float[] pinch) {
-            this.validMask = validMask; this.joints = joints; this.pinch = pinch;
+        /** Stable PhoneXR-style aim point per hand: RIGHT x/y, LEFT x/y in display 0..1. */
+        public final float[] cursor;
+        HandFrame(int validMask, float[] joints, float[] pinch, float[] cursor) {
+            this.validMask = validMask; this.joints = joints; this.pinch = pinch; this.cursor = cursor;
         }
         private static float[] ones() { float[] v = new float[8]; Arrays.fill(v, 1f); return v; }
+        private static float[] hiddenCursors() { float[] v = new float[4]; Arrays.fill(v, -1f); return v; }
     }
 
     private HandLandmarker detector;
@@ -110,6 +113,7 @@ public final class NexaHandTracker implements AutoCloseable {
     private HandFrame toWorld(Frame frame, Rect crop, int rotation, HandLandmarkerResult result) {
         float[] out = new float[126];
         float[] pinch = new float[8]; Arrays.fill(pinch, 1f);
+        float[] cursor = new float[4]; Arrays.fill(cursor, -1f);
         int mask = 0;
         List<List<NormalizedLandmark>> all = result.landmarks();
         List<List<Category>> handed = result.handedness();
@@ -123,6 +127,17 @@ public final class NexaHandTracker implements AutoCloseable {
             if (lm.size() < 21) continue;
             String side = (n < handed.size() && !handed.get(n).isEmpty()) ? handed.get(n).get(0).categoryName() : "";
             int id = "Right".equalsIgnoreCase(side) ? 0 : "Left".equalsIgnoreCase(side) ? 1 : n;
+
+            // PhoneXR's stable cursor: mostly the thumb/index bases, lightly following the
+            // fingertip midpoint. It stays near the pinch point without jumping as the pinch closes.
+            NormalizedLandmark thumbTip = lm.get(4);
+            NormalizedLandmark indexTip = lm.get(8);
+            NormalizedLandmark thumbBase = lm.get(2);
+            NormalizedLandmark indexBase = lm.get(5);
+            float pinchX = (thumbTip.x() + indexTip.x()) * 0.5f;
+            float pinchY = (thumbTip.y() + indexTip.y()) * 0.5f;
+            cursor[id * 2] = clamp(thumbBase.x() * 0.30f + indexBase.x() * 0.45f + pinchX * 0.25f, 0f, 1f);
+            cursor[id * 2 + 1] = clamp(thumbBase.y() * 0.30f + indexBase.y() * 0.45f + pinchY * 0.25f, 0f, 1f);
 
             NormalizedLandmark iMcp = lm.get(5), pMcp = lm.get(17);
             float[] iRaw = unrotate(iMcp.x(), iMcp.y(), rotation);
@@ -151,7 +166,7 @@ public final class NexaHandTracker implements AutoCloseable {
             }
             mask |= (1 << id);
         }
-        return new HandFrame(mask, out, pinch);
+        return new HandFrame(mask, out, pinch, cursor);
     }
 
     private int getImageRotationDegrees() {
