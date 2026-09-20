@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - questcraft-nexa-androidstudio
+      - nexa-phoneXR-pinch-orb
     paths:
       - 'questcraft_android/**'
       - 'questcraft_nexa/**'
