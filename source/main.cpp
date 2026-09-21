@@ -168,6 +168,7 @@ static bool prompt_url(char *out, size_t outCap) {
     static bool ready = false;
     static int32_t userId = 0;
     if (!ready) {
+        sceSysmoduleLoadModule(ORBIS_SYSMODULE_IME_DIALOG);
         sceUserServiceInitialize(nullptr);
         if (sceUserServiceGetInitialUser(&userId) != 0) userId = 0;
         sceCommonDialogInitialize();
@@ -205,10 +206,9 @@ static bool prompt_url(char *out, size_t outCap) {
         return false;
     }
 
-    struct timespec ts = {0, 10 * 1000 * 1000};
     OrbisDialogStatus st;
     while ((st = sceImeDialogGetStatus()) == ORBIS_DIALOG_STATUS_RUNNING)
-        nanosleep(&ts, nullptr);
+        SDL_Delay(10);
 
     bool accepted = false;
     if (st == ORBIS_DIALOG_STATUS_STOPPED) {
