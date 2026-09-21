@@ -25,9 +25,9 @@ LDFLAGS     := -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr -L
 
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Linux)
-CC  := clang-12
-CCX := clang++-12
-LD  := ld.lld-12
+CC  := clang
+CCX := clang++
+LD  := ld.lld
 CDIR := linux
 endif
 ifeq ($(UNAME_S),Darwin)
