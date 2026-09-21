@@ -16,9 +16,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "native_browser.h"
+
 #define FRAME_WIDTH 1920
 #define FRAME_HEIGHT 1080
-#define HTTP_USER_AGENT "Xeno-PS4-Browser/1.1 (PLAYSTATION 4)"
+#define HTTP_USER_AGENT "Xeno-PS4-Browser/1.2 (PLAYSTATION 4)"
 #define NET_POOLSIZE (16 * 1024)
 #define HTTP_CHUNK (64 * 1024)
 #define MAX_HTML (2 * 1024 * 1024)
@@ -808,7 +810,7 @@ static void render_ui() {
     SDL_Rect top = {0, 0, FRAME_WIDTH, 135};
     SDL_SetRenderDrawColor(g_renderer, 25, 93, 190, 255);
     SDL_RenderFillRect(g_renderer, &top);
-    draw_text("XENO PS4 BROWSER 1.1", 60, 38, 7, 255, 255, 255);
+    draw_text("XENO PS4 BROWSER 1.2", 60, 38, 7, 255, 255, 255);
 
     draw_truncated(g_pageTitle, 70, 170, 5, 52, 135, 200, 255);
     draw_truncated(g_currentUrl[0] ? g_currentUrl : "NO WEBSITE OPEN", 70, 225, 3, 95, 185, 195, 215);
@@ -876,7 +878,7 @@ static void render_ui() {
     SDL_Rect footer = {0, 935, FRAME_WIDTH, 145};
     SDL_SetRenderDrawColor(g_renderer, 19, 23, 34, 255);
     SDL_RenderFillRect(g_renderer, &footer);
-    draw_text("DPAD SELECT   X OPEN/DOWNLOAD   TRIANGLE URL   SQUARE REFRESH   CIRCLE BACK",
+    draw_text("DPAD SELECT   X FALLBACK LINK   TRIANGLE VISUAL BROWSER   SQUARE REFRESH   CIRCLE BACK",
               58, 978, 3, 225, 230, 240);
     draw_text("FILES SAVE TO /DATA/PKG", 58, 1028, 3, 125, 180, 235);
 
@@ -932,10 +934,34 @@ int main(int, char **) {
                     else set_status("NO PREVIOUS PAGE - TRIANGLE OPENS A NEW URL");
                 } else if (b == 2 && !g_busy) { // Square
                     if (g_currentUrl[0]) start_page(g_currentUrl, false);
-                } else if (b == 3 && !g_busy) { // Triangle
+                } else if (b == 3 && !g_busy) { // Triangle: visual native browser
                     char u[1024];
                     std::snprintf(u, sizeof(u), "%s", g_currentUrl);
-                    if (prompt_url(u, sizeof(u)) && u[0]) start_page(u, true);
+                    if (prompt_url(u, sizeof(u)) && u[0]) {
+                        char fixed[1024];
+                        if (!std::strstr(u, "://")) std::snprintf(fixed, sizeof(fixed), "https://%s", u);
+                        else std::snprintf(fixed, sizeof(fixed), "%s", u);
+
+                        std::snprintf(g_currentUrl, sizeof(g_currentUrl), "%s", fixed);
+
+                        if (has_download_extension(fixed)) {
+                            start_download(fixed);
+                        } else {
+                            char captured[4096] = {0};
+                            set_status("OPENING PS4 VISUAL BROWSER...");
+                            int br = xenoOpenNativeBrowser(fixed, captured, sizeof(captured));
+                            if (br == XENO_BROWSER_DOWNLOAD && captured[0]) {
+                                std::snprintf(g_currentUrl, sizeof(g_currentUrl), "%s", captured);
+                                set_status("FILE DETECTED - STARTING DOWNLOAD...");
+                                start_download(captured);
+                            } else if (br == XENO_BROWSER_ERROR) {
+                                set_status("VISUAL BROWSER FAILED - USING FALLBACK");
+                                start_page(fixed, true);
+                            } else {
+                                set_status("VISUAL BROWSER CLOSED");
+                            }
+                        }
+                    }
                 } else if ((b == 10 || b == 12) && !g_busy) { // fallback dpad up
                     move_selection(-1);
                 } else if ((b == 11 || b == 13) && !g_busy) { // fallback dpad down
