@@ -77,10 +77,10 @@ jobs:
               export DEBIAN_FRONTEND=noninteractive
               apt-get update -qq
               apt-get install -y --no-install-recommends make libicu66 libssl1.1 ca-certificates python3
-              make IV0000-XENO00001_00-XENOPS4BROWSER001.pkg
+              make IV0000-XENO00001_00-XENOPS4BROWSER01.pkg
             '
-          test -s IV0000-XENO00001_00-XENOPS4BROWSER001.pkg
-          cp IV0000-XENO00001_00-XENOPS4BROWSER001.pkg Xeno-PS4-Browser-v1.0.pkg
+          test -s IV0000-XENO00001_00-XENOPS4BROWSER01.pkg
+          cp IV0000-XENO00001_00-XENOPS4BROWSER01.pkg Xeno-PS4-Browser-v1.0.pkg
           sha256sum Xeno-PS4-Browser-v1.0.pkg > Xeno-PS4-Browser-v1.0.pkg.sha256
 
       - name: Upload PKG
