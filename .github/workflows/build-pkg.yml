@@ -1,0 +1,50 @@
+name: Build PS4 PKG
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - xeno-ps4-browser
+    paths:
+      - 'source/**'
+      - 'Makefile'
+      - '.github/workflows/build-pkg.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare PS4 icon
+        run: |
+          mkdir -p sce_sys
+          curl -L --fail -o sce_sys/icon0.png \
+            https://raw.githubusercontent.com/OpenOrbis/OpenOrbis-PS4-Toolchain/master/samples/hello_world/sce_sys/icon0.png
+
+      - name: Pull OpenOrbis toolchain
+        run: docker pull openorbisofficial/toolchain:latest
+
+      - name: Build PKG
+        run: |
+          docker run --rm \
+            -v "$PWD:/src" \
+            -w /src \
+            openorbisofficial/toolchain:latest \
+            make
+
+      - name: Show outputs
+        run: ls -lah *.pkg eboot.bin pkg.gp4 || true
+
+      - name: Upload PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Xeno-PS4-Browser-PKG
+          path: |
+            *.pkg
+            eboot.bin
+          if-no-files-found: error
