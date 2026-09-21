@@ -1,6 +1,6 @@
 # Xeno PS4 Browser - OpenOrbis v0.5.4
 TITLE       := Xeno PS4 Browser
-VERSION     := 1.10
+VERSION     := 1.20
 TITLE_ID    := XENO00001
 CONTENT_ID  := IV0000-XENO00001_00-XENOPS4BROWSER01
 
@@ -25,7 +25,7 @@ endif
 LIBS := -lc -lkernel -lc++ \
         -lSceUserService -lSceSystemService -lSceVideoOut -lSceAudioOut \
         -lScePad -lSceSysmodule -lSceNet -lSceSsl -lSceHttp \
-        -lSceCommonDialog -lSceImeDialog -lSDL2
+        -lSceCommonDialog -lSceImeDialog -lSceWebBrowserDialog -lSDL2
 
 CFLAGS   := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c \
             -Wall -Wno-unused-function -O2 -DORBIS -D_GNU_SOURCE \
