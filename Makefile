@@ -1,6 +1,6 @@
 # Xeno PS4 Browser - OpenOrbis v0.5.4
 TITLE       := Xeno PS4 Browser
-VERSION     := 1.00
+VERSION     := 1.10
 TITLE_ID    := XENO00001
 CONTENT_ID  := IV0000-XENO00001_00-XENOPS4BROWSER01
 
