@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
 
 // OpenOrbis v0.5.4 exposes the WebBrowserDialog symbols, but its public header
