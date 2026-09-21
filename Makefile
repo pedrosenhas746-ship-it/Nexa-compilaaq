@@ -73,3 +73,5 @@ $(INTDIR)/%.o: $(PROJDIR)/%.cpp
 
 clean:
 	rm -rf $(INTDIR) *.pkg pkg.gp4 eboot.bin sce_sys/param.sfo
+
+# CI retry after Docker permission fix
