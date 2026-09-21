@@ -300,6 +300,7 @@ static int download_thread(void *) {
     std::snprintf(g_lastFile, sizeof(g_lastFile), "%s", finalPath);
 
     int tpl = 0, conn = 0, req = 0;
+    int32_t statusCode = 0;
     FILE *fd = nullptr;
     bool ok = false;
 
@@ -317,7 +318,6 @@ static int download_thread(void *) {
     set_status("ENVIANDO REQUISICAO...");
     if (sceHttpSendRequest(req, nullptr, 0) < 0) goto done;
 
-    int32_t statusCode = 0;
     if (sceHttpGetStatusCode(req, &statusCode) < 0) goto done;
     if (statusCode < 200 || statusCode >= 300) {
         std::snprintf(g_status, sizeof(g_status), "HTTP %d - DOWNLOAD RECUSADO", (int)statusCode);
@@ -516,7 +516,7 @@ int main(int, char **) {
 
     if (g_httpReady) {
         sceHttpTerm(g_httpCtx);
-        sceSslTerm(g_sslCtx);
+        sceSslTerm();
         sceNetPoolDestroy(g_netPool);
     }
 
