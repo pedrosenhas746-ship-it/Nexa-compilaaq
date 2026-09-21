@@ -80,15 +80,15 @@ jobs:
               make IV0000-XENO00001_00-XENOPS4BROWSER01.pkg
             '
           test -s IV0000-XENO00001_00-XENOPS4BROWSER01.pkg
-          cp IV0000-XENO00001_00-XENOPS4BROWSER01.pkg Xeno-PS4-Browser-v1.1.pkg
-          sha256sum Xeno-PS4-Browser-v1.1.pkg > Xeno-PS4-Browser-v1.1.pkg.sha256
+          cp IV0000-XENO00001_00-XENOPS4BROWSER01.pkg Xeno-PS4-Browser-v1.2.pkg
+          sha256sum Xeno-PS4-Browser-v1.2.pkg > Xeno-PS4-Browser-v1.2.pkg.sha256
 
       - name: Upload PKG
         uses: actions/upload-artifact@v4
         with:
           name: Xeno-PS4-Browser-PKG
           path: |
-            Xeno-PS4-Browser-v1.1.pkg
-            Xeno-PS4-Browser-v1.1.pkg.sha256
+            Xeno-PS4-Browser-v1.2.pkg
+            Xeno-PS4-Browser-v1.2.pkg.sha256
             eboot.bin
           if-no-files-found: error
