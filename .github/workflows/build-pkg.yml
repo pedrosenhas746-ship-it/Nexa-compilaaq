@@ -10,42 +10,85 @@ on:
       - 'Makefile'
       - '.github/workflows/build-pkg.yml'
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          show-progress: false
 
-      - name: Prepare PS4 icon
+      - name: Prepare icon
         run: |
           mkdir -p sce_sys
-          curl -L --fail -o sce_sys/icon0.png \
-            https://raw.githubusercontent.com/OpenOrbis/OpenOrbis-PS4-Toolchain/master/samples/hello_world/sce_sys/icon0.png
+          curl -L --fail --retry 3 -o sce_sys/icon0.png \
+            https://raw.githubusercontent.com/OpenOrbis/OpenOrbis-PS4-Toolchain/v0.5.4/samples/hello_world/sce_sys/icon0.png
 
-      - name: Pull OpenOrbis toolchain
-        run: docker pull openorbisofficial/toolchain:latest
-
-      - name: Build PKG
+      - name: Download OpenOrbis v0.5.4 SDK
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          docker run --rm \
-            --user 0:0 \
-            -v "$PWD:/src" \
-            -w /src \
-            openorbisofficial/toolchain:latest \
-            make
+          set -euxo pipefail
+          SDK_URL=$(gh api repos/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/tags/v0.5.4 \
+            --jq '.assets[] | select(.name == "toolchain-llvm-18.tar.gz") | .browser_download_url')
+          test -n "$SDK_URL"
+          curl --fail --location --retry 3 "$SDK_URL" -o openorbis-sdk.tar.gz
+          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  openorbis-sdk.tar.gz" | sha256sum -c -
+          rm -rf .openorbis-sdk
+          mkdir -p .openorbis-sdk
+          tar -xzf openorbis-sdk.tar.gz -C .openorbis-sdk
+          LINK_X=$(find "$GITHUB_WORKSPACE/.openorbis-sdk" -type f -name link.x -print -quit)
+          test -n "$LINK_X"
+          TOOLCHAIN_ROOT=$(dirname "$LINK_X")
+          chmod +x "$TOOLCHAIN_ROOT/bin/linux/"*
+          test -x "$TOOLCHAIN_ROOT/bin/linux/create-fself"
+          test -x "$TOOLCHAIN_ROOT/bin/linux/PkgTool.Core"
+          test -f "$TOOLCHAIN_ROOT/src/modules/right.sprx"
+          test -f "$TOOLCHAIN_ROOT/src/modules/libSceFios2.prx"
+          test -f "$TOOLCHAIN_ROOT/src/modules/libc.prx"
+          echo "TOOLCHAIN_ROOT=$TOOLCHAIN_ROOT" >> "$GITHUB_ENV"
 
-      - name: Show outputs
-        run: ls -lah *.pkg eboot.bin pkg.gp4 || true
+      - name: Install LLVM 18
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang-18 lld-18
+
+      - name: Compile eboot
+        run: |
+          export OO_PS4_TOOLCHAIN="$TOOLCHAIN_ROOT"
+          make CC=clang-18 CXX=clang++-18 LD=ld.lld-18 eboot.bin
+          test -s eboot.bin
+
+      - name: Package PKG
+        run: |
+          chmod -R a+rwX "$GITHUB_WORKSPACE"
+          docker run --rm --user 0:0 \
+            --env OO_PS4_TOOLCHAIN=/opt/openorbis \
+            --volume "$GITHUB_WORKSPACE:/work" \
+            --volume "$TOOLCHAIN_ROOT:/opt/openorbis" \
+            --workdir /work \
+            ubuntu:20.04 \
+            bash -lc '
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y --no-install-recommends make libicu66 libssl1.1 ca-certificates python3
+              make IV0000-XENO00001_00-XENOPS4BROWSER001.pkg
+            '
+          test -s IV0000-XENO00001_00-XENOPS4BROWSER001.pkg
+          cp IV0000-XENO00001_00-XENOPS4BROWSER001.pkg Xeno-PS4-Browser-v1.0.pkg
+          sha256sum Xeno-PS4-Browser-v1.0.pkg > Xeno-PS4-Browser-v1.0.pkg.sha256
 
       - name: Upload PKG
         uses: actions/upload-artifact@v4
         with:
           name: Xeno-PS4-Browser-PKG
           path: |
-            *.pkg
+            Xeno-PS4-Browser-v1.0.pkg
+            Xeno-PS4-Browser-v1.0.pkg.sha256
             eboot.bin
           if-no-files-found: error
