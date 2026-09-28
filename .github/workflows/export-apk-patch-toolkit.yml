@@ -1,0 +1,61 @@
+name: Export Android APK patch toolkit
+
+on:
+  push:
+    branches: [ meta-horizon-vrbox-build ]
+    paths:
+      - '.github/workflows/export-apk-patch-toolkit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Locate Android SDK tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          AJ="$(find "$ANDROID_HOME/platforms" -mindepth 2 -maxdepth 2 -name android.jar | sort -V | tail -1)"
+          echo "BT=$BT" >> "$GITHUB_ENV"
+          echo "AJ=$AJ" >> "$GITHUB_ENV"
+          echo "Using $BT and $AJ"
+
+      - name: Download Apktool
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 4 --retry-delay 2 \
+            https://github.com/iBotPeaches/Apktool/releases/download/v3.0.3/apktool_3.0.3.jar \
+            -o /tmp/apktool.jar
+          echo 'dbf930b076c6b9be08d57c449cacefc3bdd6b71ebd59b3066fc0e1f5b14f9423  /tmp/apktool.jar' | sha256sum -c -
+
+      - name: Assemble toolkit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p toolkit/build-tools/lib toolkit/platform
+          cp /tmp/apktool.jar toolkit/apktool.jar
+          cp "$AJ" toolkit/platform/android.jar
+          cp "$BT/d8" toolkit/build-tools/d8
+          cp "$BT/apksigner" toolkit/build-tools/apksigner
+          cp "$BT/zipalign" toolkit/build-tools/zipalign
+          cp "$BT/aapt2" toolkit/build-tools/aapt2
+          cp "$BT/lib/d8.jar" toolkit/build-tools/lib/d8.jar
+          cp "$BT/lib/apksigner.jar" toolkit/build-tools/lib/apksigner.jar
+          chmod +x toolkit/build-tools/{d8,apksigner,zipalign,aapt2}
+          (cd toolkit && find . -type f -maxdepth 4 -print0 | sort -z | xargs -0 sha256sum) > toolkit/SHA256SUMS.txt
+          du -ah toolkit | sort -h | tail -20
+
+      - name: Upload toolkit
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-patch-toolkit
+          path: toolkit/**
+          if-no-files-found: error
+          retention-days: 2
