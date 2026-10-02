@@ -26,8 +26,15 @@ jobs:
           set -euo pipefail
           base64 -d quest-exporter-source.b64 > /tmp/quest-exporter.zip
           sha256sum /tmp/quest-exporter.zip
-          unzip -t /tmp/quest-exporter.zip
-          unzip -q /tmp/quest-exporter.zip
+          python3 - <<'PY'
+          import zipfile
+          p = "/tmp/quest-exporter.zip"
+          with zipfile.ZipFile(p) as z:
+              bad = z.testzip()
+              if bad:
+                  raise SystemExit("Bad ZIP entry: " + bad)
+              z.extractall(".")
+          PY
           test -f quest_exporter/app/src/main/java/com/horizon/questexporter/MainActivity.java
 
       - name: Set up Java 17
