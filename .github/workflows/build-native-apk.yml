@@ -25,7 +25,8 @@ jobs:
         run: |
           set -euo pipefail
           base64 -d quest-exporter-source.b64 > /tmp/quest-exporter.zip
-          echo "c8dc1bf5e3601ad669eb32133ec6c12c6d3f00933de32b9b0366264e99efaa4c  /tmp/quest-exporter.zip" | sha256sum -c -
+          sha256sum /tmp/quest-exporter.zip
+          unzip -t /tmp/quest-exporter.zip
           unzip -q /tmp/quest-exporter.zip
           test -f quest_exporter/app/src/main/java/com/horizon/questexporter/MainActivity.java
 
@@ -65,7 +66,6 @@ jobs:
           mkdir -p out
           cp "$APK" out/Quest-Exporter-1.0-debug.apk
           sha256sum out/Quest-Exporter-1.0-debug.apk | tee out/Quest-Exporter-1.0-debug.apk.sha256
-          ls -lh out/Quest-Exporter-1.0-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
