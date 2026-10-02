@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
     <uses-feature android:name="android.hardware.sensor.gyroscope" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.vulkan.level" android:required="false" />
+    <uses-feature android:glEsVersion="0x00030000" android:required="false" />
 
     <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <package android:name="com.minevr.bridge" />
         <package android:name="com.qcxr.qcxr" />
         <package android:name="com.roblox.client" />
@@ -11,7 +19,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="NEXA XR OS 23"
+        android:label="NEXA Universal Runtime v2"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar.Fullscreen">
         <activity
