@@ -1,12 +1,12 @@
-name: NEXA Native Android APK
+name: NEXA Universal Runtime v2 APK
 
 on:
-  workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ universal-runtime-v2 ]
     paths:
       - 'native/**'
       - '.github/workflows/build-native-apk.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,30 +26,35 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android platform
+      - name: Install Android SDK 35
         shell: bash
         run: |
           set -euo pipefail
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then
+            SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n1)"
+          fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.9
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Verify clean source
+      - name: Verify universal runtime source
         shell: bash
         run: |
           set -euo pipefail
-          if grep -RniE 'superhot' native; then
-            echo 'Forbidden SUPERHOT reference found'
-            exit 2
-          fi
-          grep -Rqs 'com.minevr.bridge' native/app/src/main
-          grep -Rqs 'com.roblox.client' native/app/src/main
+          grep -Rqs 'QuestCompatibilityScanner' native/app/src/main/java
+          grep -Rqs 'UniversalRuntimeManager' native/app/src/main/java
+          grep -Rqs 'libopenxr_loader' native/app/src/main/java
+          grep -Rqs 'libovrplugin' native/app/src/main/java
+          grep -Rqs 'libvrapi' native/app/src/main/java
 
       - name: Build debug APK
         working-directory: native
@@ -65,14 +70,14 @@ jobs:
           APK='native/app/build/outputs/apk/debug/app-debug.apk'
           test -s "$APK"
           mkdir -p out
-          cp "$APK" out/NEXA-XR-OS-23-native-debug.apk
-          sha256sum out/NEXA-XR-OS-23-native-debug.apk | tee out/NEXA-XR-OS-23-native-debug.apk.sha256
-          ls -lh out/NEXA-XR-OS-23-native-debug.apk
+          cp "$APK" out/NEXA-Universal-Runtime-v2-debug.apk
+          sha256sum out/NEXA-Universal-Runtime-v2-debug.apk | tee out/NEXA-Universal-Runtime-v2-debug.apk.sha256
+          ls -lh out/NEXA-Universal-Runtime-v2-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NEXA-XR-OS-23-native-APK
+          name: NEXA-Universal-Runtime-v2-APK
           path: out/*
           if-no-files-found: error
           retention-days: 14
