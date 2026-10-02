@@ -10,8 +10,8 @@ android {
         applicationId 'com.nexa.xr'
         minSdk 24
         targetSdk 35
-        versionCode 230100
-        versionName '23.1.0-native'
+        versionCode 230200
+        versionName '23.2.0-universal-v2'
     }
 
     buildTypes {
