@@ -44,7 +44,11 @@ public final class MainActivity extends Activity implements SensorEventListener 
 
         nexaView = new NexaView(this);
         setContentView(nexaView);
-        nexaView.setMessage("Runtime Universal v2 pronto");
+        try {
+            startService(new android.content.Intent(this, NexaRuntimeBridgeService.class));
+        } catch (Exception ignored) {
+        }
+        nexaView.setMessage("Runtime Universal v2 pronto • bridge v" + NexaRuntimeContract.PROTOCOL_VERSION);
         scanApps();
     }
 
@@ -142,6 +146,10 @@ public final class MainActivity extends Activity implements SensorEventListener 
             return;
         }
         String decision = runtime.compatibilityDecision(p, deviceCaps);
+        try {
+            startService(new android.content.Intent(this, NexaRuntimeBridgeService.class));
+        } catch (Exception ignored) {
+        }
         if (runtime.launch(p)) {
             nexaView.setMessage("Abrindo " + p.label + " • " + decision);
         } else {
