@@ -38,9 +38,12 @@ public final class QuestCompatibilityScanner {
                 result.add(profile);
             }
         }
-        Collections.sort(result, Comparator.comparing(
-                p -> p.label == null ? p.packageName : p.label,
-                String.CASE_INSENSITIVE_ORDER));
+        Collections.sort(result, (a, b) -> {
+            if (a.isVrCandidate() != b.isVrCandidate()) return a.isVrCandidate() ? -1 : 1;
+            String al = a.label == null ? a.packageName : a.label;
+            String bl = b.label == null ? b.packageName : b.label;
+            return String.CASE_INSENSITIVE_ORDER.compare(al, bl);
+        });
         return result;
     }
 
