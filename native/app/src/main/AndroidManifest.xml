@@ -22,6 +22,14 @@
         android:label="NEXA Universal Runtime v2"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar.Fullscreen">
+        <service
+            android:name=".NexaRuntimeBridgeService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.nexa.xr.RUNTIME" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:configChanges="keyboardHidden|orientation|screenSize"
