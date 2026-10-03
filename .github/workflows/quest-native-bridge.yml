@@ -36,6 +36,12 @@ jobs:
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Package verified native libraries
         run: python3 quest-compat/tools/package-native-kit.py
+      - name: Verify APK adaptation and signing on a synthetic fixture
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y apktool
+          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
+          python3 quest-compat/tools/smoke-adaptation.py
       - uses: actions/upload-artifact@v4
         with:
           name: NEXA-Quest-Bridge-v3

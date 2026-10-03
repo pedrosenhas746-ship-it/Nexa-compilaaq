@@ -27,8 +27,10 @@ public final class QuestCompatibilityScanner {
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         for (ApplicationInfo app : apps) {
             if (context.getPackageName().equals(app.packageName)) continue;
+            if ("com.oculus.systemdriver".equals(app.packageName) ||
+                    "org.freedesktop.monado.openxr_runtime.out_of_process".equals(app.packageName)) continue;
 
-            boolean launchable = pm.getLaunchIntentForPackage(app.packageName) != null;
+            boolean launchable = QuestLaunchResolver.resolve(pm, app.packageName) != null;
             boolean system = (app.flags & ApplicationInfo.FLAG_SYSTEM) != 0;
             if (system && !launchable) continue;
 
@@ -68,6 +70,9 @@ public final class QuestCompatibilityScanner {
         if (!launchable) {
             mode = "NO_LAUNCH";
             notes = "Pacote sem Activity de inicializacao visivel.";
+        } else if (flags.vrApi) {
+            mode = "VRAPI_PHONEXR";
+            notes = "Rota experimental: PhoneXR + driver VrApi. Loader e gameplay ainda precisam de teste.";
         } else if (flags.openxr) {
             mode = "OPENXR";
             notes = "Candidato OpenXR; runtime real ainda depende do dispositivo e do loader.";
@@ -133,4 +138,3 @@ public final class QuestCompatibilityScanner {
         boolean ovrAvatar;
     }
 }
-

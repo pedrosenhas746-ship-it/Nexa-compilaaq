@@ -101,11 +101,12 @@ public final class UniversalRuntimeManager {
             error = compatibilityDecision(p, caps);
             return false;
         }
-        Intent launch = pm.getLaunchIntentForPackage(p.packageName);
-        if (launch == null || launch.getComponent() == null) {
+        ComponentName component = QuestLaunchResolver.resolve(pm, p.packageName);
+        if (component == null) {
             error = "Jogo sem atividade de abertura";
             return false;
         }
+        Intent launch = new Intent(Intent.ACTION_MAIN).setComponent(component);
         if (p.vrApi || p.openXrLoader) {
             if (!available(PHONE_XR) || (p.vrApi && !available(VRAPI_DRIVER))) {
                 error = compatibilityDecision(p, caps);

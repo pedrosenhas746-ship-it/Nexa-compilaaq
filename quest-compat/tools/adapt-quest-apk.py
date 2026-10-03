@@ -75,12 +75,18 @@ def update_manifest(root):
     if app is None or app.get(A + 'isSplitRequired') == 'true':
         raise ValueError('Missing application or required splits')
     app.set(A + 'extractNativeLibs', 'true')
+    for permission in ['org.khronos.openxr.permission.OPENXR', 'org.khronos.openxr.permission.OPENXR_SYSTEM']:
+        if not any(n.get(A + 'name') == permission for n in root.findall('uses-permission')):
+            ET.SubElement(root, 'uses-permission', {A + 'name': permission})
     queries = root.find('queries')
     if queries is None:
         queries = ET.SubElement(root, 'queries')
     for package in [RUNTIME, 'com.oculus.systemdriver', 'org.khronos.openxr.runtime_broker']:
         if not any(n.get(A + 'name') == package for n in queries.findall('package')):
             ET.SubElement(queries, 'package', {A + 'name': package})
+    authorities = 'org.khronos.openxr.runtime_broker;org.khronos.openxr.system_runtime_broker'
+    if not any(n.get(A + 'authorities') == authorities for n in queries.findall('provider')):
+        ET.SubElement(queries, 'provider', {A + 'authorities': authorities})
     # Broker discovery is used by the Khronos Android loader.
     if not any(i.find("action[@" + A + "name='org.khronos.openxr.OpenXRRuntimeService']") is not None
                for i in queries.findall('intent')):
