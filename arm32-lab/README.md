@@ -11,7 +11,7 @@ inside a 64-bit process. NEXA's existing APK does not link the GPL component.
 ## What the prototype does
 
 * Select a standalone APK through Android's document picker.
-* Identify ARM32 libraries and execute CPU self-tests.
+* Identify ARM32 libraries and execute ARM, Thumb and NEON CPU self-tests.
 * Map selected ELF32 ARM shared objects into **guest memory**, process their
   SysV dynamic symbol tables and REL relocations, and run bounded entrypoints.
 * Query `opus_get_version_string` when the APK contains `libopus_egpv.so`.
@@ -45,7 +45,7 @@ gradle :app:assembleDebug :app:assembleAndroidTest -PunicornRoot=/path/to/unicor
 ```
 
 The workflow `.github/workflows/arm32-lab.yml` builds ARM64 and x86_64 host
-libraries and executes six Android API 35 emulator tests. The fixture contains
+libraries and executes seven Android API 35 emulator tests. The fixture contains
 only independently authored ARM instructions, never a commercial game binary.
 Source code of this companion is GPL-2.0-only; see LICENSE and Unicorn's
 upstream COPYING/CREDITS. Original NEXA and game files retain their own licences.

@@ -23,7 +23,16 @@ struct Cpu {
     std::map<uint32_t,std::string> traps;
     std::string stopped;
     uint64_t invalid=0;
-    Cpu(){check(uc_open(UC_ARCH_ARM,UC_MODE_ARM,&uc));}
+    Cpu(){
+        check(uc_open(UC_ARCH_ARM,UC_MODE_ARM,&uc));
+        try{
+            check(uc_ctl_set_cpu_model(uc,UC_CPU_ARM_CORTEX_A15));
+            uint32_t cpacr=0,fpexc=0x40000000;
+            check(uc_reg_read(uc,UC_ARM_REG_C1_C0_2,&cpacr));cpacr|=0xf<<20;
+            check(uc_reg_write(uc,UC_ARM_REG_C1_C0_2,&cpacr));
+            check(uc_reg_write(uc,UC_ARM_REG_FPEXC,&fpexc));
+        }catch(...){uc_close(uc);uc=nullptr;throw;}
+    }
     ~Cpu(){if(uc)uc_close(uc);}
     Cpu(const Cpu&)=delete;
     static void code(uc_engine* u,uint64_t addr,uint32_t,void* opaque){
@@ -75,10 +84,15 @@ std::string selfTest(){
     const uint32_t mem[]={0xe5901000,0xe2811009,0xe5801000,0xe1a00001,0xe12fff1e};cpu.write(BASE+0x200,mem,sizeof mem);
     cpu.put(VM+0x800,33);
     if(cpu.call(BASE+0x200,VM+0x800)!=42||cpu.word(VM+0x800)!=42)throw std::runtime_error("Memória ARM: resultado incorreto");
+    // ARMv7 NEON: copy an eight-byte vector through guest memory.
+    const uint32_t neon[]={0xf421070d,0xf40c070d,0xe12fff1e};cpu.write(BASE+0x400,neon,sizeof neon);
+    uint32_t src=VM+0x900,dst=VM+0x920;uint64_t value=0x8877665544332211,got=0;
+    cpu.write(src,&value,8);check(uc_reg_write(cpu.uc,UC_ARM_REG_R12,&dst));cpu.call(BASE+0x400,0,src);
+    check(uc_mem_read(cpu.uc,dst,&got,8));if(got!=value)throw std::runtime_error("NEON: cópia incorreta");
     const uint32_t loop=0xeafffffe;cpu.put(BASE+0x300,loop);
     bool limited=false;try{cpu.call(BASE+0x300);}catch(const std::exception& e){limited=std::string(e.what()).find("Limite")!=std::string::npos;}
     if(!limited)throw std::runtime_error("Limite de instruções falhou");
-    return "ARM32 executado pelo motor de 64 bits: ARM=42; Thumb=12; memória=42; loop interrompido.\n";
+    return "ARM32 executado pelo motor de 64 bits: ARM=42; Thumb=12; memória=42; loop interrompido; NEON=OK.\n";
 }
 
 struct Elf {

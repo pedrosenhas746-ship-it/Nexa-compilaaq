@@ -57,7 +57,7 @@ jobs:
             adb install $(find apks -name app-debug.apk)
             adb install $(find apks -name app-debug-androidTest.apk)
             adb shell am instrument -w com.nexa.arm32.lab.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (6 tests)' device-test.log
+            grep -q 'OK (7 tests)' device-test.log
             adb shell am start -W -n com.nexa.arm32.lab/com.nexa.arm32.LabActivity
             adb shell screencap -p /sdcard/arm32-lab.png
             adb pull /sdcard/arm32-lab.png arm32-lab.png
