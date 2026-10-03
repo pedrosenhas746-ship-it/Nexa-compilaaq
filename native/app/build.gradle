@@ -10,8 +10,8 @@ android {
         applicationId 'com.nexa.xr'
         minSdk 26
         targetSdk 35
-        versionCode 230400
-        versionName '23.4.0-import'
+        versionCode 230401
+        versionName '23.4.1-startup'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 

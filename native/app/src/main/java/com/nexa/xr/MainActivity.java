@@ -38,7 +38,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         hideSystemUi();
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+        rotationSensor = sensorManager == null ? null : sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         scanner = new QuestCompatibilityScanner(this);
         runtime = new UniversalRuntimeManager(this);
         deviceCaps = runtime.getDeviceCaps();
@@ -92,7 +92,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     @Override
     protected void onPause() {
         super.onPause();
-        sensorManager.unregisterListener(this);
+        if (sensorManager != null) sensorManager.unregisterListener(this);
     }
 
     @Override
@@ -119,7 +119,13 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private void scanApps() {
         nexaView.setMessage("Escaneando apps e runtimes...");
         new Thread(() -> {
-            List<QuestAppProfile> scanned = scanner.scanInstalledApps();
+            List<QuestAppProfile> scanned;
+            try { scanned = scanner.scanInstalledApps(); }
+            catch (RuntimeException error) {
+                android.util.Log.e("NEXA", "Scan failed", error);
+                nexaView.post(() -> nexaView.setMessage("Erro na busca: " + error.getClass().getSimpleName()));
+                return;
+            }
             synchronized (MainActivity.this) {
                 apps.clear();
                 apps.addAll(scanned);

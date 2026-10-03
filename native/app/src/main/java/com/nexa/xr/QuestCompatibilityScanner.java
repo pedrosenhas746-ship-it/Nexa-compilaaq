@@ -26,6 +26,8 @@ public final class QuestCompatibilityScanner {
         List<QuestAppProfile> result = new ArrayList<>();
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
         for (ApplicationInfo app : apps) {
+            if (app == null || app.packageName == null) continue;
+            try {
             if (context.getPackageName().equals(app.packageName)) continue;
             if ("com.oculus.systemdriver".equals(app.packageName) ||
                     "org.freedesktop.monado.openxr_runtime.out_of_process".equals(app.packageName)) continue;
@@ -37,6 +39,9 @@ public final class QuestCompatibilityScanner {
             QuestAppProfile profile = inspect(app, launchable);
             if (profile.isVrCandidate() || launchable) {
                 result.add(profile);
+            }
+            } catch (RuntimeException error) {
+                android.util.Log.w("NEXA", "Skipping unreadable app " + app.packageName, error);
             }
         }
 

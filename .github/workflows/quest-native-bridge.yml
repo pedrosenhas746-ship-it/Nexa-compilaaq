@@ -80,7 +80,7 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: NEXA-Quest-Bridge-v4
+          name: NEXA-Quest-Bridge-v4.1
           path: out/*
           if-no-files-found: error
           retention-days: 30
@@ -96,6 +96,10 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [29, 34, 35]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -109,16 +113,23 @@ jobs:
       - name: Verify AndroidKeyStore signing and APK parsing on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 29
+          api-level: ${{ matrix.api }}
           arch: x86_64
           disable-animations: true
           script: |
             adb install $(find apks -name app-debug.apk)
             adb install $(find apks -name app-debug-androidTest.apk)
             adb shell am instrument -w com.nexa.xr.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (1 test)' device-test.log
+            grep -q 'OK (4 tests)' device-test.log
+            adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.HomeActivity
+            adb shell screencap -p /sdcard/nexa-home.png
+            adb pull /sdcard/nexa-home.png nexa-home.png
+            adb logcat -d -b crash > crash-log.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: NEXA-device-import-test-log
-          path: device-test.log
+          name: NEXA-device-test-api-${{ matrix.api }}
+          path: |
+            device-test.log
+            nexa-home.png
+            crash-log.txt
