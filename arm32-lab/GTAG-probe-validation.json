@@ -1,0 +1,22 @@
+{
+  "host": "Linux x86_64, Unicorn 2.1.4",
+  "physical_moto_test": false,
+  "quest_gameplay": false,
+  "original_apk_sha256": "a7100c7d1dfc45e682bd1e5b3d7a0ed3fd4df04d65ff45594f1e79cbecf37ffa",
+  "checks": [
+    {
+      "library": "libopus_egpv.so",
+      "sha256": "f504e299ad2def0942c4456d17c1c085262188de2f3a437a1755cd6ee41e3781",
+      "exit_code": 0,
+      "output": "ARM32 executado pelo motor de 64 bits: ARM=42; Thumb=12; memória=42; loop interrompido.\nELF32 carregado em memória emulada; 175 relocações.\nDependências: liblog.so libm.so libstdc++.so libc.so libdl.so \nImports externos sem ponte: 23\nCódigo real do APK executado: libopus unknown\n",
+      "stderr": ""
+    },
+    {
+      "library": "libmain.so",
+      "sha256": "5d0075ca77933eb71eb40dbccf1173d73bda85d7a51cf7c25178e94d8c942f39",
+      "exit_code": 0,
+      "output": "ARM32 executado pelo motor de 64 bits: ARM=42; Thumb=12; memória=42; loop interrompido.\nELF32 carregado em memória emulada; 79 relocações.\nDependências: liblog.so libm.so libdl.so libc.so \nImports externos sem ponte: 30\nInicialização interrompida: Ponte pendente: JavaVM.AttachCurrentThread (JNI Android de 32 bits)\n",
+      "stderr": ""
+    }
+  ]
+}
