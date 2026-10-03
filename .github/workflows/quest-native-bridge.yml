@@ -19,7 +19,9 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Android tools
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1'
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-35' 'build-tools;35.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1'
       - name: Retrieve pinned SDK declarations (not Meta binaries)
         run: |
           curl --fail --location --retry 3 -o /tmp/vrapi-sdk.zip https://raw.githubusercontent.com/emawind84/ovr_sdk_mobile_dist/edaf95714e80dcd2645f69ef255d6fbfc883a73e/ovr_sdk_mobile_1.50.0.zip
