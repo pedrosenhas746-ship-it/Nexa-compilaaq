@@ -24,6 +24,7 @@ if(HB_BUILD_LEGACY_VRAPI)
   add_library(hb_legacy_vrapi SHARED src/vrapi_system.cpp src/vrapi_frame.cpp src/vrapi_swapchain.cpp src/vrapi_input.cpp src/vrapi_driver.cpp)
   # Direct APK replacement must expose the SONAME requested by OVRPlugin.
   set_target_properties(hb_legacy_vrapi PROPERTIES OUTPUT_NAME vrapi)
+  target_compile_definitions(hb_legacy_vrapi PRIVATE HB_DEFAULT_QUEST=1)
   target_include_directories(hb_legacy_vrapi PRIVATE "${VRAPI_ROOT}/Include")
   target_link_libraries(hb_legacy_vrapi PRIVATE hb_legacy_xr dl)
   target_compile_options(hb_legacy_vrapi PRIVATE -Wall -Wextra -Wno-missing-field-initializers)

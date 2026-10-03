@@ -29,13 +29,7 @@ get_proc(const char *name)
 		return nullptr;
 	}
 	void *function = dlsym(handle, name);
-	// Older loaders (1.1.2x) also ask for work-in-progress names such as vrapi_SubmitFrame2_temp.
-	if (function == nullptr) {
-		const char *suffix = std::strstr(name, "_temp");
-		if (suffix != nullptr && suffix[5] == '\0') {
-			function = dlsym(handle, std::string(name, suffix).c_str());
-		}
-	}
+	// SubmitFrame2_temp has a different signature; never alias it to SubmitFrame2.
 	if (function == nullptr) {
 		__android_log_print(ANDROID_LOG_WARN, "Compatibility-Layer-VrApi", "driver: no %s", name);
 	}

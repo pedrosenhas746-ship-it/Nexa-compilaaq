@@ -38,10 +38,26 @@ jobs:
         run: python3 quest-compat/tools/package-native-kit.py
       - name: Verify APK adaptation and signing on a synthetic fixture
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y apktool
-          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
+          mkdir -p /tmp/nexa-android-tools/lib /tmp/nexa-android-tools/lib64
+          curl --fail --location --retry 3 -o /tmp/nexa-android-tools/apktool.jar https://github.com/iBotPeaches/Apktool/releases/download/v2.12.1/apktool_2.12.1.jar
+          echo '66cf4524a4a45a7f56567d08b2c9b6ec237bcdd78cee69fd4a59c8a0243aeafa  /tmp/nexa-android-tools/apktool.jar' | sha256sum -c -
+          cat > /tmp/nexa-android-tools/apktool <<'SH'
+          #!/bin/sh
+          exec java -jar "$(dirname "$0")/apktool.jar" "$@"
+          SH
+          chmod +x /tmp/nexa-android-tools/apktool
+          SDK_TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          cp "$SDK_TOOLS/apksigner" "$SDK_TOOLS/zipalign" "$SDK_TOOLS/aapt2" /tmp/nexa-android-tools/
+          cp "$SDK_TOOLS/lib/apksigner.jar" /tmp/nexa-android-tools/lib/
+          cp "$SDK_TOOLS/lib64/libc++.so" /tmp/nexa-android-tools/lib64/
+          export PATH="/tmp/nexa-android-tools:$PATH"
           python3 quest-compat/tools/smoke-adaptation.py
+          tar -C /tmp -czf /tmp/nexa-android-tools.tgz nexa-android-tools
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEXA-Android-adaptation-tools
+          path: /tmp/nexa-android-tools.tgz
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: NEXA-Quest-Bridge-v3

@@ -53,7 +53,12 @@ configured_product()
 	}
 	// Not set: a 64-bit game is a Quest game (there never was a 64-bit Gear VR), so it gets both
 	// hands as tracked Touch controllers; a 32-bit one is Gear VR with its one pointer.
+#ifdef HB_DEFAULT_QUEST
+	// Quest builds can be ARM32 too, including the supplied GTAG pre-alpha.
+	return Product::quest;
+#else
 	return sizeof(void *) == 8 ? Product::quest : Product::gear_vr;
+#endif
 }
 
 // Runs a JNI call on the current thread, attaching it to the VM for the call if needed.
@@ -591,10 +596,12 @@ vrapi_ShowSystemUIWithExtra(const ovrJava *java, const ovrSystemUIType type, con
 	return vrapi_ShowSystemUI(java, type);
 }
 
-VRAPI_EXTRA_EXPORT void
-vrapi_SetRemoteEmulation(const ovrJava *, const bool)
+VRAPI_EXTRA_EXPORT ovrResult
+vrapi_SetRemoteEmulation(ovrMobile *, const bool)
 {
-	VRAPI_TRACE("vrapi_SetRemoteEmulation");}
+	VRAPI_TRACE("vrapi_SetRemoteEmulation");
+	return ovrSuccess; // This adapter never sends duplicate Android remote events.
+}
 
 #define VRAPI_UNSUPPORTED(name)                                                                                        \
 	VRAPI_EXTRA_EXPORT int name()                                                                                  \
