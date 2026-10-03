@@ -48,7 +48,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             startService(new android.content.Intent(this, NexaRuntimeBridgeService.class));
         } catch (Exception ignored) {
         }
-        nexaView.setMessage("Runtime Universal v2 pronto • bridge v" + NexaRuntimeContract.PROTOCOL_VERSION);
+        nexaView.setMessage("Quest Bridge v3 pronto • bridge v" + NexaRuntimeContract.PROTOCOL_VERSION);
         scanApps();
     }
 
@@ -153,7 +153,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
         if (runtime.launch(p)) {
             nexaView.setMessage("Abrindo " + p.label + " • " + decision);
         } else {
-            nexaView.setMessage("Falhou: " + p.label + " • " + decision);
+            nexaView.setMessage(runtime.lastError());
         }
     }
 
@@ -209,7 +209,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             paint.setColor(Color.WHITE);
             paint.setTextSize(Math.max(22f, eyeW * 0.041f));
             paint.setFakeBoldText(true);
-            c.drawText("NEXA UNIVERSAL RUNTIME v2", cx - parallaxX, h * 0.10f - parallaxY, paint);
+            c.drawText("NEXA QUEST BRIDGE v3", cx - parallaxX, h * 0.10f - parallaxY, paint);
 
             paint.setFakeBoldText(false);
             paint.setTextSize(Math.max(11f, eyeW * 0.017f));
@@ -298,3 +298,4 @@ public final class MainActivity extends Activity implements SensorEventListener 
         }
     }
 }
+

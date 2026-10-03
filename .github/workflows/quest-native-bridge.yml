@@ -1,0 +1,42 @@
+name: NEXA Quest native compatibility
+on:
+  push:
+    branches: [quest-native-bridge-v3]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Android tools
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;26.3.11579264' 'cmake;3.22.1'
+      - name: Retrieve pinned SDK declarations (not Meta binaries)
+        run: |
+          curl --fail --location --retry 3 -o /tmp/vrapi-sdk.zip https://raw.githubusercontent.com/emawind84/ovr_sdk_mobile_dist/edaf95714e80dcd2645f69ef255d6fbfc883a73e/ovr_sdk_mobile_1.50.0.zip
+          python3 quest-compat/tools/extract-sdk-headers.py /tmp/vrapi-sdk.zip /tmp/vrapi-sdk
+      - name: Host tests
+        run: python3 -m unittest discover -s quest-compat/tests -v
+      - name: Build own VrApi library and driver
+        working-directory: quest-compat/android
+        run: gradle --no-daemon --stacktrace :legacy-driver:assembleDebug -PvrapiRoot=/tmp/vrapi-sdk/VrApi
+      - name: Build NEXA launcher
+        working-directory: native
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Package verified native libraries
+        run: python3 quest-compat/tools/package-native-kit.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEXA-Quest-Bridge-v3
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30

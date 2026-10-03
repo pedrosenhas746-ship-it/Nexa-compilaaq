@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="org.khronos.openxr.permission.OPENXR" />
+    <uses-permission android:name="org.khronos.openxr.permission.OPENXR_SYSTEM" />
+    <queries>
+        <package android:name="org.freedesktop.monado.openxr_runtime.out_of_process" />
+        <provider android:authorities="org.khronos.openxr.runtime_broker;org.khronos.openxr.system_runtime_broker" />
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="com.oculus.intent.category.VR" /></intent>
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
+    </queries>
+    <application android:label="Horizon Bridge · driver VrApi experimental" android:allowBackup="false"
+        android:multiArch="true" android:extractNativeLibs="true">
+        <activity android:name="dev.phonexr.vrapidriver.GameLauncher" android:exported="true"
+            android:excludeFromRecents="true" android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <provider android:name="dev.phonexr.vrapidriver.VisibilityProvider"
+            android:authorities="dev.horizonbridge.legacydriver.visibility"
+            android:exported="false" android:grantUriPermissions="true" />
+    </application>
+</manifest>

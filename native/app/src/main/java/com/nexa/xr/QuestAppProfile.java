@@ -57,3 +57,4 @@ public final class QuestAppProfile {
         return s.toString();
     }
 }
+

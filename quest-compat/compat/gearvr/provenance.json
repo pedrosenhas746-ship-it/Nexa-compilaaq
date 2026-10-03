@@ -1,0 +1,56 @@
+{
+  "sourceArchive": "questandgearandopenxr(1).zip",
+  "sourceSha256": "7d4da7e41e1900bd4f40ea5d733eb73f8e0759d49a4f1f79b3fc548ae258ec3c",
+  "files": [
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/vrapi_driver.cpp",
+      "originalSha256": "f960318a760a3f90bdf43c9ca519433741e68829681a646bfc7b0897d6e2a4ee",
+      "output": "compat/gearvr/src/vrapi_driver.cpp",
+      "correctedSha256": "f960318a760a3f90bdf43c9ca519433741e68829681a646bfc7b0897d6e2a4ee"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/vrapi_frame.cpp",
+      "originalSha256": "2a5a8c8373baaf778c2171b9d5faea87a7dd88fe43e783f34120cc4f34d60375",
+      "output": "compat/gearvr/src/vrapi_frame.cpp",
+      "correctedSha256": "abb78e29852a401b70651e74ba36eaacb756466588f4e9b3075c7b5afdfc5021"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/vrapi_input.cpp",
+      "originalSha256": "5d10c8ca667173fb467eb81460a1c432b79b8f5b5c0f7f7f5807298082ebfe07",
+      "output": "compat/gearvr/src/vrapi_input.cpp",
+      "correctedSha256": "8a6ac40d9a4a422e741807deba8873a5d151e1f90f4c8331509b61479f6436f4"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/vrapi_internal.h",
+      "originalSha256": "1535d88c4e0a282def9d00a69f3a792b641c1cd521b9910d3be02d85ccdc12e7",
+      "output": "compat/gearvr/src/vrapi_internal.h",
+      "correctedSha256": "bac148d8ef3fc47144f5f8bc96e72fd1e59b49b2f0a9d583fe531ed2a2b6dfac"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/vrapi_swapchain.cpp",
+      "originalSha256": "5b8736e524f4b755b05ad20536d27ab183ec8b73b975cdbd9fd81078d9abac93",
+      "output": "compat/gearvr/src/vrapi_swapchain.cpp",
+      "correctedSha256": "624eebd550c21b12d03285014312a852f46d2aa70d70feea11a74d6d424ece00"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/vrapi_system.cpp",
+      "originalSha256": "5fefb0db6ddfd19dbd40d0ab1f735a5798e4f69840cfd6e72910928865d27cf1",
+      "output": "compat/gearvr/src/vrapi_system.cpp",
+      "correctedSha256": "b69e4de5058920320f1d401fb3e43debe24eb226bed3005c3dd0285658806e3c"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/xr_backend.cpp",
+      "originalSha256": "81121b6a6e63cb875573064a86711c62f48e2d1ffb57548dbba69a16bd5b80b4",
+      "output": "compat/gearvr/src/xr_backend.cpp",
+      "correctedSha256": "0ca4b3f5f86af993c4e020a35010d205714fe9ef87590b028b7b6f11216a271a"
+    },
+    {
+      "source": "questandgearandopenxr/gearvr-shim/src/xr_backend.h",
+      "originalSha256": "e57752a06ce6fa2d8b078b49c15b38307a4137539608b77c674e201004a37a4c",
+      "output": "compat/gearvr/src/xr_backend.h",
+      "correctedSha256": "2ca361011feae99d07939011aa84e10774f759def07f83e9d76a888f31a7c902"
+    }
+  ],
+  "built": false,
+  "integratedIntoGames": false
+}

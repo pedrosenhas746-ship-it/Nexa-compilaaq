@@ -133,3 +133,4 @@ public final class QuestCompatibilityScanner {
         boolean ovrAvatar;
     }
 }
+

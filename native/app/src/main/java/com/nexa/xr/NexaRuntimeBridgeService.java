@@ -99,3 +99,4 @@ public final class NexaRuntimeBridgeService extends Service implements SensorEve
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
     }
 }
+

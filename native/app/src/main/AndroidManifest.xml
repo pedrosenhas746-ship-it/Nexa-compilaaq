@@ -8,6 +8,8 @@
     <uses-feature android:glEsVersion="0x00030000" android:required="false" />
 
     <queries>
+        <package android:name="org.freedesktop.monado.openxr_runtime.out_of_process" />
+        <package android:name="com.oculus.systemdriver" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -19,7 +21,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="NEXA Universal Runtime v2"
+        android:label="NEXA Quest Bridge v3"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar.Fullscreen">
         <service
@@ -42,3 +44,4 @@
         </activity>
     </application>
 </manifest>
+

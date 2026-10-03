@@ -2,7 +2,9 @@ package com.nexa.xr;
 
 import android.app.ActivityManager;
 import android.content.Context;
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.content.pm.ConfigurationInfo;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
@@ -43,6 +45,21 @@ public final class UniversalRuntimeManager {
 
     private final Context context;
     private final PackageManager pm;
+    private String error = "";
+    private static final ComponentName PHONE_XR = new ComponentName(
+            "org.freedesktop.monado.openxr_runtime.out_of_process",
+            "org.freedesktop.monado.phonexr.GameLauncher");
+    private static final ComponentName VRAPI_DRIVER = new ComponentName(
+            "com.oculus.systemdriver", "dev.phonexr.vrapidriver.GameLauncher");
+
+    public String lastError() { return error; }
+
+    private boolean available(ComponentName name) {
+        try {
+            ActivityInfo info = pm.getActivityInfo(name, 0);
+            return info.exported && info.enabled && info.applicationInfo.enabled;
+        } catch (PackageManager.NameNotFoundException e) { return false; }
+    }
 
     public UniversalRuntimeManager(Context context) {
         this.context = context.getApplicationContext();
@@ -68,21 +85,49 @@ public final class UniversalRuntimeManager {
     public String compatibilityDecision(QuestAppProfile p, DeviceCaps caps) {
         if (!p.launchable) return "SEM ACTIVITY DE START";
         if (p.arm64 && !caps.arm64) return "ABI ARM64 INCOMPATIVEL";
-        if (p.openXrLoader) return "TENTAR OPENXR + FALLBACK";
-        if (p.vrApi || p.ovrPlugin) return "REQUER QUEST SHIM";
+        if (p.vrApi) return available(PHONE_XR) && available(VRAPI_DRIVER)
+                ? "VRAPI EXPERIMENTAL VIA PHONEXR" : "INSTALE PHONEXR + DRIVER VRAPI";
+        if (p.openXrLoader) return available(PHONE_XR)
+                ? "OPENXR VIA PHONEXR" : "INSTALE PHONEXR";
+        if (p.ovrPlugin) return "OVRPLUGIN: RUNTIME NATIVO NAO IDENTIFICADO";
         if ("UNITY".equals(p.engine) || "UNREAL".equals(p.engine)) return "TENTAR MODO ANDROID/FLAT";
         return "START ANDROID PADRAO";
     }
 
     public boolean launch(QuestAppProfile p) {
+        error = "";
+        DeviceCaps caps = getDeviceCaps();
+        if (!p.launchable || (p.arm64 && !p.arm32 && !caps.arm64)) {
+            error = compatibilityDecision(p, caps);
+            return false;
+        }
         Intent launch = pm.getLaunchIntentForPackage(p.packageName);
-        if (launch == null) return false;
+        if (launch == null || launch.getComponent() == null) {
+            error = "Jogo sem atividade de abertura";
+            return false;
+        }
+        if (p.vrApi || p.openXrLoader) {
+            if (!available(PHONE_XR) || (p.vrApi && !available(VRAPI_DRIVER))) {
+                error = compatibilityDecision(p, caps);
+                return false;
+            }
+            // The runtime launcher grants its visibility URI to the game process.
+            // VrApi additionally routes through the external driver; no silent
+            // flat launch is presented as XR emulation.
+            launch = new Intent().setComponent(PHONE_XR)
+                    .putExtra("component", launch.getComponent().flattenToString())
+                    .putExtra("vrapi", p.vrApi);
+        } else if (p.ovrPlugin) {
+            error = "OVRPlugin sem VrApi/OpenXR detectavel. Analise o APK e splits.";
+            return false;
+        }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        launch.putExtra("nexa_runtime", "universal-v2");
+        launch.putExtra("nexa_runtime", "quest-bridge-v3");
         try {
             context.startActivity(launch);
             return true;
         } catch (Exception e) {
+            error = "Falha ao abrir: " + e.getClass().getSimpleName();
             return false;
         }
     }
