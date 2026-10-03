@@ -22,7 +22,22 @@ public final class DeviceSigningTest {
         assertTrue(prepared.isFile());
         PackageInfo info=context.getPackageManager().getPackageArchiveInfo(prepared.getPath(),0);
         assertNotNull(info);assertEquals(context.getPackageName(),info.packageName);
-        assertTrue((info.applicationInfo.flags & android.content.pm.ApplicationInfo.FLAG_EXTRACT_NATIVE_LIBS)!=0);
+        // Read the compiled attribute through Android's XML parser. PackageInfo flags
+        // are not a reliable proxy for extraction on archives with no native entries.
+        info.applicationInfo.sourceDir=prepared.getAbsolutePath();
+        info.applicationInfo.publicSourceDir=prepared.getAbsolutePath();
+        android.content.res.Resources resources=context.getPackageManager().getResourcesForApplication(info.applicationInfo);
+        boolean applicationFound=false;
+        try(android.content.res.XmlResourceParser xml=resources.getAssets().openXmlResourceParser("AndroidManifest.xml")) {
+            for(int event=xml.getEventType();event!=org.xmlpull.v1.XmlPullParser.END_DOCUMENT;event=xml.next()) {
+                if(event==org.xmlpull.v1.XmlPullParser.START_TAG&&"application".equals(xml.getName())) {
+                    applicationFound=true;
+                    assertTrue(xml.getAttributeBooleanValue("http://schemas.android.com/apk/res/android","extractNativeLibs",false));
+                    break;
+                }
+            }
+        }
+        assertTrue(applicationFound);
         java.security.KeyStore store=java.security.KeyStore.getInstance("AndroidKeyStore");store.load(null);
         byte[] cert=store.getCertificate("nexa-apk-import-v1").getEncoded();
         importer.prepare(source,analysis,text->{});
