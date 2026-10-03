@@ -25,7 +25,7 @@ public final class ImportActivity extends Activity {
     private DeviceApkImporter.Analysis analysis;
     private boolean busy;
     private String installedPackage;
-    @Override public void onCreate(Bundle state){super.onCreate(state);buildUi();folder=new File(getCacheDir(),"quest-import");folder.mkdirs();importer=new DeviceApkImporter(this,folder);handleInstallStatus(getIntent());}
+    @Override public void onCreate(Bundle state){super.onCreate(state);buildUi();folder=new File(getCacheDir(),"quest-import-"+java.util.UUID.randomUUID());folder.mkdirs();importer=new DeviceApkImporter(this,folder);handleInstallStatus(getIntent());}
     private void buildUi(){
         ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);int p=(int)(20*getResources().getDisplayMetrics().density);box.setPadding(p,p,p,p);box.setBackgroundColor(Color.rgb(8,15,25));scroll.addView(box);
         TextView title=new TextView(this);title.setText("Importar jogo do Quest");title.setTextSize(25);title.setTextColor(Color.WHITE);box.addView(title);
@@ -82,5 +82,12 @@ public final class ImportActivity extends Activity {
     private void ui(Runnable r){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())r.run();});}
     private void message(String m){ui(()->status.setText(m));}
     private void fail(Exception e){ui(()->{setBusy(false);status.setText("Não foi possível preparar: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage()));});}
-    @Override protected void onDestroy(){worker.shutdown();super.onDestroy();}
+    @Override protected void onDestroy(){
+        worker.shutdownNow();
+        if(isFinishing()&&folder!=null) {
+            File cleanup=folder;
+            new Thread(()->{try{if(worker.awaitTermination(10,TimeUnit.SECONDS)) {File[]files=cleanup.listFiles();if(files!=null)for(File f:files)f.delete();cleanup.delete();}}catch(InterruptedException ignored){}},"nexa-cache-cleanup").start();
+        }
+        super.onDestroy();
+    }
 }

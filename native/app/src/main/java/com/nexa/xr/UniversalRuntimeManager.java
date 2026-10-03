@@ -123,7 +123,7 @@ public final class UniversalRuntimeManager {
             return false;
         }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        launch.putExtra("nexa_runtime", "quest-bridge-v3");
+        launch.putExtra("nexa_runtime", "quest-bridge-v4");
         try {
             context.startActivity(launch);
             return true;

@@ -60,16 +60,19 @@ public final class DeviceApkImporter {
             for(String abi:a.abis) {
                 boolean hasVr=names.contains("lib/"+abi+"/libvrapi.so"),hasXr=names.contains("lib/"+abi+"/libopenxr_loader.so");
                 if(hasVr!=vrapi||(!vrapi&&!hasXr))throw new IOException("APIs diferentes entre ABIs: preparação específica necessária");
-                Set<String> required=new TreeSet<>();
+                Set<String> required=new TreeSet<>(), requiredXr=new TreeSet<>();
                 File temp=new File(folder,"elf-audit.so");
                 for(String n:names)if(n.startsWith("lib/"+abi+"/")&&n.endsWith(".so")&&!n.endsWith("/libvrapi.so")&&!n.endsWith("/libopenxr_loader.so")) {
                     progress.update("Analisando "+n.substring(n.lastIndexOf('/')+1)+" • "+abi);
                     try(InputStream in=apk.getInputStream(apk.getEntry(n));OutputStream out=new BufferedOutputStream(new FileOutputStream(temp))){ApkRewriter.copy(in,out,apk.getEntry(n).getSize());}
-                    for(String s:ElfSymbols.read(temp,abi).imports)if(s.contains("vrapi_"))required.add(s);
+                    for(String s:ElfSymbols.read(temp,abi).imports) { if(s.contains("vrapi_")) required.add(s); else if(s.matches("xr[A-Z].*")) requiredXr.add(s); }
                 }
                 temp.delete();
                 if(vrapi){File lib=asset(abi,"libvrapi.so");Set<String>missing=new TreeSet<>(required);missing.removeAll(ElfSymbols.read(lib,abi).exports);if(!missing.isEmpty())throw new IOException("VrApi ainda sem funções: "+missing);a.replacements.put("lib/"+abi+"/libvrapi.so",lib);a.imports+=required.size();}
-                a.replacements.put("lib/"+abi+"/libopenxr_loader.so",asset(abi,"libopenxr_loader.so"));
+                File xr=asset(abi,"libopenxr_loader.so");
+                Set<String> missingXr=new TreeSet<>(requiredXr);missingXr.removeAll(ElfSymbols.read(xr,abi).exports);
+                if(!missingXr.isEmpty())throw new IOException("OpenXR ainda sem funções: "+missingXr);
+                a.replacements.put("lib/"+abi+"/libopenxr_loader.so",xr);
             }
             a.manifest=xml.adapt();
             try{context.getPackageManager().getPackageInfo(a.packageName,0);a.warnings.add("Já existe uma instalação com este pacote. Uma assinatura diferente impede atualizar. Use um perfil/aparelho de teste para preservar o original e seus saves.");}catch(android.content.pm.PackageManager.NameNotFoundException ignored){}
@@ -109,6 +112,13 @@ public final class DeviceApkImporter {
             ApkVerifier.Result result=new ApkVerifier.Builder(signed).setMinCheckedPlatformVersion(24).build().verify();
             if(!result.isVerified())throw new IOException("A assinatura não passou na verificação: "+result.getErrors());
             verifyCopies(input,signed,a.replacements.keySet());
+            try(ZipFile apk=new ZipFile(signed)) {
+                for(Map.Entry<String,File> entry:a.replacements.entrySet()) {
+                    ZipEntry zipped=apk.getEntry(entry.getKey());
+                    if(zipped==null||!Arrays.equals(digest(new FileInputStream(entry.getValue())),digest(apk.getInputStream(zipped))))
+                        throw new IOException("Biblioteca preparada não corresponde ao adaptador: "+entry.getKey());
+                }
+            }
             return signed;
         } catch(Exception e){signed.delete();throw e;}finally{unsigned.delete();}
     }
