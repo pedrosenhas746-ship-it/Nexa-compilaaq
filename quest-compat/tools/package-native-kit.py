@@ -11,7 +11,7 @@ out.mkdir(exist_ok=True)
 driver = Path('quest-compat/android/legacy-driver/build/outputs/apk/debug/legacy-driver-debug.apk')
 launcher = Path('native/app/build/outputs/apk/debug/app-debug.apk')
 shutil.copy2(driver, out / 'NEXA-VrApi-Driver-v3-debug.apk')
-shutil.copy2(launcher, out / 'NEXA-Quest-Bridge-v3-debug.apk')
+shutil.copy2(launcher, out / 'NEXA-Quest-Bridge-v4-debug.apk')
 kit = out / 'NEXA-VrApi-Native-Kit-v3.zip'
 readelf = shutil.which('readelf')
 if readelf is None:

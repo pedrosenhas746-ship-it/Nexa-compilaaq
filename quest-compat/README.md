@@ -1,4 +1,4 @@
-# NEXA Quest Bridge v3 — biblioteca VrApi própria
+# NEXA Quest Bridge v4 — biblioteca VrApi própria
 
 Esta versão usa o backend VrApi/OpenXR do Horizon Bridge 0.12 anexado pelo usuário.
 Gera uma `libvrapi.so` própria, com SONAME correto, em ARM64 e ARM32. O código de
@@ -11,7 +11,7 @@ hand skeleton/mesh e serviços Meta continuam sem implementação funcional.
 
 ## Dois caminhos para testes
 
-1. Instale **NEXA-Quest-Bridge-v3-debug.apk**, PhoneXR e
+1. Instale **NEXA-Quest-Bridge-v4-debug.apk**, PhoneXR e
    **NEXA-VrApi-Driver-v3-debug.apk** no celular Android. O NEXA detecta VrApi
    e abre através do launcher PhoneXR, que encaminha ao driver e concede visibilidade
    entre os processos. O loader original do jogo precisa aceitar esse contrato.
@@ -20,8 +20,9 @@ hand skeleton/mesh e serviços Meta continuam sem implementação funcional.
    substituindo `libvrapi.so` e incluindo o loader Khronos em cada ABI. A ferramenta
    abaixo também ajusta a descoberta do runtime e as categorias de abertura.
 
-O NEXA v3 não importa nem adapta APKs pelo próprio celular. A ferramenta de
-adaptação é para PC. Jogos OpenXR usam o launcher PhoneXR sem o driver VrApi.
+O NEXA v4 importa e adapta APKs completos pelo próprio celular; veja
+[IMPORTAR-NO-CELULAR.md](IMPORTAR-NO-CELULAR.md). A ferramenta de PC continua
+disponível. Jogos OpenXR usam o launcher PhoneXR sem o driver VrApi.
 Jogos que usam OVRPlugin com VrApi embutida não podem receber uma biblioteca
 separada automaticamente; precisam de análise específica.
 

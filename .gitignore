@@ -1,0 +1,6 @@
+**/__pycache__/
+**/build/
+**/.gradle/
+**/local.properties
+native/app/src/main/assets/quest-runtime/
+out/

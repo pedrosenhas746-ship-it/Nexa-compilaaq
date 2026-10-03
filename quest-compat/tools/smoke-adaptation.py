@@ -46,4 +46,20 @@ with tempfile.TemporaryDirectory(prefix='nexa-fixture-') as temp:
     subprocess.run(['python3', str(root / 'quest-compat/tools/adapt-quest-apk.py'), str(fixture),
                     '--kit', str(kit_path), '--output', str(work / 'adapted.apk'),
                     '--keystore', str(keystore)], check=True, env=env)
+    jar = Path(os.environ['ANDROID_HOME']) / 'build-tools/35.0.0/lib/apksigner.jar'
+    java_root = root / 'native/app/src/main/java/com/nexa/xr/importer'
+    classes = work / 'classes'
+    classes.mkdir()
+    subprocess.run(['javac', '-cp', str(jar), '-d', str(classes),
+                    str(java_root / 'BinaryManifest.java'), str(java_root / 'ElfSymbols.java'),
+                    str(java_root / 'ApkRewriter.java'), str(root / 'quest-compat/tests/java/ImporterHostTest.java')], check=True)
+    java_output = work / 'java-adapted.apk'
+    subprocess.run(['java', '-cp', str(classes) + os.pathsep + str(jar), 'ImporterHostTest',
+                    str(fixture), str(kit_path), str(java_output), str(keystore)], check=True)
+    subprocess.run(['zipalign', '-c', '4', str(java_output)], check=True)
+    subprocess.run(['aapt2', 'dump', 'xmltree', str(java_output), '--file', 'AndroidManifest.xml'], check=True)
+    # Host compiler bundle for validating user-provided APKs locally without uploading games.
+    import shutil
+    shutil.make_archive('/tmp/nexa-java-import-tests', 'zip', classes)
+    shutil.copy2(jar, '/tmp/nexa-import-apksig.jar')
 print('Synthetic APK rebuilt, signed and verified. No game or device execution.')

@@ -29,6 +29,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
     private UniversalRuntimeManager.DeviceCaps deviceCaps;
     private final List<QuestAppProfile> apps = new ArrayList<>();
     private int selectedIndex = -1;
+    private String requestedPackage;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +49,16 @@ public final class MainActivity extends Activity implements SensorEventListener 
             startService(new android.content.Intent(this, NexaRuntimeBridgeService.class));
         } catch (Exception ignored) {
         }
-        nexaView.setMessage("Quest Bridge v3 pronto • bridge v" + NexaRuntimeContract.PROTOCOL_VERSION);
+        nexaView.setMessage("Quest Bridge v4 pronto • bridge v" + NexaRuntimeContract.PROTOCOL_VERSION);
+        requestedPackage = getIntent().getStringExtra("nexa.select_package");
+        scanApps();
+    }
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        requestedPackage = intent.getStringExtra("nexa.select_package");
         scanApps();
     }
 
@@ -114,6 +124,10 @@ public final class MainActivity extends Activity implements SensorEventListener 
                 apps.clear();
                 apps.addAll(scanned);
                 selectedIndex = apps.isEmpty() ? -1 : 0;
+                if (requestedPackage != null) {
+                    for (int i = 0; i < apps.size(); i++) if (requestedPackage.equals(apps.get(i).packageName)) selectedIndex = i;
+                    requestedPackage = null;
+                }
             }
             nexaView.post(() -> {
                 QuestAppProfile p = selectedApp();
@@ -209,7 +223,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             paint.setColor(Color.WHITE);
             paint.setTextSize(Math.max(22f, eyeW * 0.041f));
             paint.setFakeBoldText(true);
-            c.drawText("NEXA QUEST BRIDGE v3", cx - parallaxX, h * 0.10f - parallaxY, paint);
+            c.drawText("NEXA QUEST BRIDGE v4", cx - parallaxX, h * 0.10f - parallaxY, paint);
 
             paint.setFakeBoldText(false);
             paint.setTextSize(Math.max(11f, eyeW * 0.017f));
@@ -237,7 +251,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             drawCard(c, offsetX, eyeW, h, 0, "SCAN APPS", "DETECTAR QUEST / OPENXR / OVR");
             drawCard(c, offsetX, eyeW, h, 1, "PROXIMO APP", apps.isEmpty() ? "LISTA VAZIA" : ((selectedIndex + 1) + "/" + apps.size()));
             drawCard(c, offsetX, eyeW, h, 2, "EXECUTAR", p == null ? "SEM APP" : p.mode);
-            drawCard(c, offsetX, eyeW, h, 3, "RECENTRALIZAR", "HEAD POSE");
+            drawCard(c, offsetX, eyeW, h, 3, "IMPORTAR APK", "SELECIONAR E ADAPTAR NO CELULAR");
 
             paint.setTextSize(Math.max(11f, eyeW * 0.017f));
             paint.setColor(Color.rgb(210, 220, 235));
@@ -289,10 +303,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
             } else if (y >= h * 0.58f && y < h * 0.715f) {
                 launchSelected();
             } else if (y >= h * 0.715f && y < h * 0.85f) {
-                yaw = 0f;
-                pitch = 0f;
-                roll = 0f;
-                setMessage("Head pose recentralizada");
+                startActivity(new android.content.Intent(MainActivity.this, com.nexa.xr.importer.ImportActivity.class));
             }
             return true;
         }
