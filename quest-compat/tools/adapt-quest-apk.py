@@ -164,7 +164,7 @@ def adapt(args):
         work = Path(temp)
         imports = verify_imports(args.apk, replacements, commands['readelf'], work)
         decoded = work / 'decoded'
-        subprocess.run([commands['apktool'], 'd', '-s', '-f', '-o', str(decoded), str(args.apk)], check=True)
+        subprocess.run([commands['apktool'], 'd', '-s', '--force-manifest', '-f', '-o', str(decoded), str(args.apk)], check=True)
         manifest = decoded / 'AndroidManifest.xml'
         tree = ET.parse(manifest)
         update_manifest(tree.getroot())
