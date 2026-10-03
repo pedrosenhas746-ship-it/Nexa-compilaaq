@@ -1,0 +1,61 @@
+name: NEXA original APK startup reproduction
+on:
+  push:
+    branches: [quest-startup-repro]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  startup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [29, 34, 35]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: NEXA-Android-import-test-apks
+          run-id: 37088080567
+          github-token: ${{ github.token }}
+          path: apks
+      - name: Enable emulator KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install $(find apks -name app-debug.apk)
+            adb logcat -c
+            adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.MainActivity
+            python3 - <<'PY'
+            import subprocess,time,pathlib
+            deadline=time.monotonic()+12
+            while time.monotonic()<deadline:
+                time.sleep(0.5)
+            log=subprocess.check_output(['adb','logcat','-d'],text=True)
+            pathlib.Path('startup-log.txt').write_text(log)
+            resumed=subprocess.check_output(['adb','shell','dumpsys','activity','activities'],text=True)
+            pathlib.Path('startup-activities.txt').write_text(resumed)
+            if 'Process: com.nexa.xr.debug' in log or not any('com.nexa.xr.debug' in line for line in resumed.splitlines() if 'ResumedActivity' in line or 'topResumedActivity' in line):
+                print(log[-20000:])
+                raise SystemExit('Original NEXA did not stay open')
+            print('Original NEXA main activity stayed open for 12 seconds')
+            PY
+            adb shell screencap -p /sdcard/startup.png
+            adb pull /sdcard/startup.png startup.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: NEXA-original-startup-api-${{ matrix.api }}
+          path: |
+            startup-log.txt
+            startup-activities.txt
+            startup.png
