@@ -35,8 +35,6 @@ public final class MainActivity extends Activity implements SensorEventListener 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        hideSystemUi();
-
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         rotationSensor = sensorManager == null ? null : sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
         scanner = new QuestCompatibilityScanner(this);
@@ -45,6 +43,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
 
         nexaView = new NexaView(this);
         setContentView(nexaView);
+        hideSystemUi();
         try {
             startService(new android.content.Intent(this, NexaRuntimeBridgeService.class));
         } catch (Exception ignored) {
@@ -64,7 +63,7 @@ public final class MainActivity extends Activity implements SensorEventListener 
 
     private void hideSystemUi() {
         if (android.os.Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = getWindow().getInsetsController();
+            WindowInsetsController c = getWindow().getDecorView().getWindowInsetsController();
             if (c != null) {
                 c.hide(WindowInsets.Type.statusBars() | WindowInsets.Type.navigationBars());
                 c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
