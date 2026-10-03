@@ -1,5 +1,6 @@
 // Initialization, properties and system calls of the VrApi layer.
 #include "vrapi_internal.h"
+#include "init_worker.h"
 
 #include <GLES3/gl3.h>
 #include <sys/system_properties.h>
@@ -154,18 +155,13 @@ vrapi_Initialize(const ovrInitParms *initParms)
 	// while starting, and a thread that ran runtime code must not exit and run its destructors then.
 	JavaVM *vm = state.vm;
 	jobject activity = state.activity;
-	auto started = std::make_shared<std::promise<bool>>();
-	state.backend_ready = started->get_future().share();
-	std::thread([vm, activity, started] {
+	state.backend_ready = InitWorker::instance().submit([vm, activity] {
 		const bool up = global().backend.initialize(vm, activity);
 		if (!up) {
 			VRAPI_WARN("Compatibility-Layer runtime is not available");
 		}
-		started->set_value(up);
-		for (;;) {
-			pause();
-		}
-	}).detach();
+		return up;
+	});
 	state.product = configured_product();
 	state.api_minor_version = initParms->MinorVersion;
 	state.initialized = true;
