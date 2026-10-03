@@ -6,7 +6,8 @@ Não instale o driver no próprio Quest. Os dois primeiros componentes continuam
 Abra NEXA, toque **IMPORTAR APK**, depois **Selecionar APK**. Selecione o APK completo do
 seu jogo. A análise identifica as ABIs, escolhe a arquitetura que o Android suporta,
 recusa splits incompletos e compara imports VrApi estáticos com exports reais do adaptador.
-Quando a análise permitir, toque **Adaptar no celular** e depois **Instalar cópia**.
+Quando a análise permitir, a cópia é adaptada e assinada automaticamente.
+Depois toque **Instalar cópia**.
 O Android pode pedir para permitir instalações desta fonte; confirme a instalação.
 Toque **Abrir no NEXA**, depois **EXECUTAR**. O jogo segue pelo PhoneXR.
 
@@ -28,8 +29,7 @@ A importação preserva assets, DEX e a lógica/licenças do jogo; não implemen
 
 A cópia tem nova assinatura e preserva o packageName: ela não pode substituir uma
 instalação com outra chave. O NEXA nunca desinstala o original nem apaga saves;
-use um perfil ou aparelho de teste. O arquivo escolhido é mantido no cache privado
-até a próxima seleção, sem alterar a origem.
+use um perfil ou aparelho de teste. O arquivo escolhido fica no cache privado durante a importação, sem alterar a origem.
 
 ## Validação automatizada
 
@@ -38,3 +38,7 @@ manifest/ELF/ZIP usado no Android sobre uma fixture nativa. Confere edição ide
 rejeição de XML/ABI inválidos, assinatura v2, alinhamento ZIP e preservação das entradas.
 Uma verificação Android em emulador testa assinatura AndroidKeyStore e leitura do APK
 preparado. Isso não testa execução de jogos Quest, renderização ou controles.
+
+Se você já instalou o NEXA v3 e o Android recusar atualizar por assinatura,
+desinstale somente o NEXA v3 antes de instalar v4. PhoneXR e o driver já instalados
+podem permanecer. Não desinstale o jogo original para resolver esse aviso.

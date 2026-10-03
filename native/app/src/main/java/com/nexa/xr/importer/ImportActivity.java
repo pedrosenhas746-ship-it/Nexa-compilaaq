@@ -18,7 +18,7 @@ public final class ImportActivity extends Activity {
     private static final int PICK=81,ALLOW_INSTALL=82;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private TextView status;
-    private Button choose,prepare,install,launch;
+    private Button choose,install,launch;
     private ProgressBar progress;
     private File folder,input,prepared;
     private DeviceApkImporter importer;
@@ -31,8 +31,7 @@ public final class ImportActivity extends Activity {
         TextView title=new TextView(this);title.setText("Importar jogo do Quest");title.setTextSize(25);title.setTextColor(Color.WHITE);box.addView(title);
         TextView intro=new TextView(this);intro.setText("Selecione um APK completo. O NEXA verifica o celular, prepara uma cópia e abre o instalador do Android. Compatibilidade experimental.");intro.setTextColor(Color.LTGRAY);intro.setTextSize(16);intro.setPadding(0,p/2,0,p/2);box.addView(intro);
         choose=button(box,"1. Selecionar APK",v->pick());
-        prepare=button(box,"2. Adaptar no celular",v->prepare());prepare.setEnabled(false);
-        install=button(box,"3. Instalar cópia",v->install());install.setEnabled(false);
+        install=button(box,"2. Instalar cópia",v->install());install.setEnabled(false);
         launch=button(box,"Abrir no NEXA",v->openNexa());launch.setEnabled(false);
         progress=new ProgressBar(this);progress.setVisibility(View.GONE);box.addView(progress);
         status=new TextView(this);status.setText("Pronto para selecionar. PhoneXR e driver VrApi devem estar instalados para executar jogos VrApi.");status.setTextSize(16);status.setTextColor(Color.WHITE);status.setTextIsSelectable(true);status.setPadding(0,p,0,p);box.addView(status);setContentView(scroll);
@@ -46,10 +45,10 @@ public final class ImportActivity extends Activity {
             for(File f:folder.listFiles()==null?new File[0]:folder.listFiles())if(f.isFile())f.delete();
             File file=new File(folder,"source.apk");try(InputStream in=getContentResolver().openInputStream(uri);OutputStream out=new BufferedOutputStream(new FileOutputStream(file))){if(in==null)throw new IOException("Arquivo inacessível");ApkRewriter.copy(in,out,8L*1024*1024*1024);}
             input=file;analysis=importer.inspect(input,this::message);
-            ui(()->{setBusy(false);status.setText(analysis.summary());prepare.setEnabled(true);});
+            prepared=importer.prepare(input,analysis,this::message);
+            ui(()->{setBusy(false);status.setText("Adaptação automática concluída e assinatura verificada.\n\n"+analysis.summary()+"\n\nToque em Instalar cópia para testar.");});
         }catch(Exception e){fail(e);}});
     }
-    private void prepare(){if(busy||analysis==null)return;setBusy(true);worker.execute(()->{try{prepared=importer.prepare(input,analysis,this::message);ui(()->{setBusy(false);install.setEnabled(true);status.setText("Cópia preparada e assinatura verificada.\n\n"+analysis.summary()+"\n\nInstale para testar; instalação não confirma funcionamento.");});}catch(Exception e){fail(e);}});}
     private void install(){
         if(busy||prepared==null)return;
         if(!getPackageManager().canRequestPackageInstalls()) {startActivityForResult(new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())),ALLOW_INSTALL);return;}
@@ -78,7 +77,7 @@ public final class ImportActivity extends Activity {
         else{status.setText("Instalação não concluída: "+i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)+"\n\nSe houver original com outra assinatura, o Android impede a atualização. Seus saves não foram removidos.");}
     }
     private void openNexa(){Intent i=new Intent(this,MainActivity.class);i.putExtra("nexa.select_package",installedPackage);i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);startActivity(i);finish();}
-    private void setBusy(boolean value){busy=value;choose.setEnabled(!value);prepare.setEnabled(!value&&analysis!=null&&prepared==null);install.setEnabled(!value&&prepared!=null);progress.setVisibility(value?View.VISIBLE:View.GONE);}
+    private void setBusy(boolean value){busy=value;choose.setEnabled(!value);install.setEnabled(!value&&prepared!=null);progress.setVisibility(value?View.VISIBLE:View.GONE);}
     private void ui(Runnable r){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())r.run();});}
     private void message(String m){ui(()->status.setText(m));}
     private void fail(Exception e){ui(()->{setBusy(false);status.setText("Não foi possível preparar: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage()));});}
