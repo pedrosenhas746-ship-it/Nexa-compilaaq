@@ -77,7 +77,7 @@ public final class ImportActivity extends Activity {
         else{status.setText("Instalação não concluída: "+i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)+"\n\nSe houver original com outra assinatura, o Android impede a atualização. Seus saves não foram removidos.");}
     }
     private void openNexa(){Intent i=new Intent(this,MainActivity.class);i.putExtra("nexa.select_package",installedPackage);i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);startActivity(i);finish();}
-    private void setBusy(boolean value){busy=value;choose.setEnabled(!value);install.setEnabled(!value&&prepared!=null);progress.setVisibility(value?View.VISIBLE:View.GONE);}
+    private void setBusy(boolean value){busy=value;choose.setEnabled(!value);install.setEnabled(!value&&prepared!=null);launch.setEnabled(!value&&installedPackage!=null);progress.setVisibility(value?View.VISIBLE:View.GONE);}
     private void ui(Runnable r){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())r.run();});}
     private void message(String m){ui(()->status.setText(m));}
     private void fail(Exception e){ui(()->{setBusy(false);status.setText("Não foi possível preparar: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage()));});}
