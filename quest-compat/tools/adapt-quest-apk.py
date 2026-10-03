@@ -174,7 +174,7 @@ def adapt(args):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
         unsigned, aligned, signed = [work / n for n in ['unsigned.apk', 'aligned.apk', 'signed.apk']]
-        subprocess.run([commands['apktool'], 'b', str(decoded), '-o', str(unsigned)], check=True)
+        subprocess.run([commands['apktool'], 'b', '--use-aapt2', str(decoded), '-o', str(unsigned)], check=True)
         subprocess.run([commands['zipalign'], '-P', '16', '-f', '4', str(unsigned), str(aligned)], check=True)
         subprocess.run([commands['apksigner'], 'sign', '--ks', str(args.keystore), '--ks-key-alias', args.alias,
                         '--ks-pass', 'env:NEXA_KEYSTORE_PASSWORD', '--out', str(signed), str(aligned)], check=True)
