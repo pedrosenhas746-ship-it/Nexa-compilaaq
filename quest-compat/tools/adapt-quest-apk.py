@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Adapt a standalone VrApi APK to the experimental NEXA/OpenXR library.
 
-Requires apktool, readelf, zipalign, apksigner and an existing signing keystore.
+Requires apktool 2.12.1+, readelf, zipalign, apksigner and an existing signing keystore.
 Does not modify entitlement, platform services, dex or game assets.
 """
 import argparse
@@ -164,7 +164,7 @@ def adapt(args):
         work = Path(temp)
         imports = verify_imports(args.apk, replacements, commands['readelf'], work)
         decoded = work / 'decoded'
-        subprocess.run([commands['apktool'], 'd', '-s', '--force-manifest', '-f', '-o', str(decoded), str(args.apk)], check=True)
+        subprocess.run([commands['apktool'], 'd', '-s', '-f', '-o', str(decoded), str(args.apk)], check=True)
         manifest = decoded / 'AndroidManifest.xml'
         tree = ET.parse(manifest)
         update_manifest(tree.getroot())
@@ -174,7 +174,7 @@ def adapt(args):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
         unsigned, aligned, signed = [work / n for n in ['unsigned.apk', 'aligned.apk', 'signed.apk']]
-        subprocess.run([commands['apktool'], 'b', '--use-aapt2', str(decoded), '-o', str(unsigned)], check=True)
+        subprocess.run([commands['apktool'], 'b', str(decoded), '-o', str(unsigned)], check=True)
         subprocess.run([commands['zipalign'], '-P', '16', '-f', '4', str(unsigned), str(aligned)], check=True)
         subprocess.run([commands['apksigner'], 'sign', '--ks', str(args.keystore), '--ks-key-alias', args.alias,
                         '--ks-pass', 'env:NEXA_KEYSTORE_PASSWORD', '--out', str(signed), str(aligned)], check=True)

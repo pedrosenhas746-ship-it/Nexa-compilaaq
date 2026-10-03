@@ -27,7 +27,7 @@ separada automaticamente; precisam de análise específica.
 
 ## Adaptar um APK standalone no PC
 
-Necessário: Python 3, apktool, readelf, Android build-tools 35 (`zipalign` e
+Necessário: Python 3, apktool 2.12.1 ou mais recente (aapt2 padrão), readelf, Android build-tools 35 (`zipalign` e
 `apksigner`) no PATH, e uma keystore de teste. Extraia este ZIP numa pasta.
 
 ```sh
