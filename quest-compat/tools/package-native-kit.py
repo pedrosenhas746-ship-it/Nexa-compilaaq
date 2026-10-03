@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import zipfile
+import json
 
 out = Path('out')
 out.mkdir(exist_ok=True)
@@ -32,6 +33,12 @@ with zipfile.ZipFile(driver) as apk, zipfile.ZipFile(kit, 'w', zipfile.ZIP_DEFLA
                 for required in ['vrapi_Initialize', 'vrapi_EnterVrMode', 'vrapi_SubmitFrame2', 'vrapi_GetPredictedTracking2']:
                     if required not in exports:
                         raise SystemExit(f'Missing actual export: {required}')
+                if abi == 'armeabi-v7a':
+                    profile = json.loads(Path('quest-compat/profiles/gtag-pre-alpha.json').read_text())
+                    missing = sorted(set(profile['requiredVrApiSymbols']) - set(exports))
+                    if missing:
+                        raise SystemExit('GTAG native imports unresolved: ' + ', '.join(missing))
+                    print('GTAG ARM32:', len(profile['requiredVrApiSymbols']), 'imports resolved (not game execution)')
                 dynamic = subprocess.check_output([readelf, '-d', str(lib)], text=True)
                 if '(SONAME)' not in dynamic or '[libvrapi.so]' not in dynamic:
                     raise SystemExit('Wrong VrApi SONAME')

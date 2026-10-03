@@ -273,6 +273,27 @@ vrapi_GetHandMesh(ovrMobile *, const ovrHandedness, ovrHandMeshHeader *)
 
 } // extern "C"
 
+// The supplied GTAG pre-alpha OVRPlugin imports these C++-mangled VrApi names.
+// Use the verified argument layouts and forward to the C frontend. Hand APIs
+// still report no device/not implemented; aliases resolve linkage, not tracking.
+VRAPI_EXTRA_EXPORT ovrResult
+hb_cpp_GetHandPose(ovrMobile *, ovrDeviceID, double, ovrHandPoseHeader *)
+    __asm__("_Z17vrapi_GetHandPoseP9ovrMobilejdP18ovrHandPoseHeader_");
+ovrResult hb_cpp_GetHandPose(ovrMobile *ovr, ovrDeviceID id, double time, ovrHandPoseHeader *pose)
+{ return vrapi_GetHandPose(ovr, id, time, pose); }
+
+VRAPI_EXTRA_EXPORT ovrResult
+hb_cpp_GetHandSkeleton(ovrMobile *, ovrHandedness, ovrHandSkeletonHeader *)
+    __asm__("_Z21vrapi_GetHandSkeletonP9ovrMobile14ovrHandedness_P22ovrHandSkeletonHeader_");
+ovrResult hb_cpp_GetHandSkeleton(ovrMobile *ovr, ovrHandedness hand, ovrHandSkeletonHeader *skeleton)
+{ return vrapi_GetHandSkeleton(ovr, hand, skeleton); }
+
+VRAPI_EXTRA_EXPORT ovrResult
+hb_cpp_GetHandMesh(ovrMobile *, ovrHandedness, ovrHandMeshHeader *)
+    __asm__("_Z17vrapi_GetHandMeshP9ovrMobile14ovrHandedness_P18ovrHandMeshHeader_");
+ovrResult hb_cpp_GetHandMesh(ovrMobile *ovr, ovrHandedness hand, ovrHandMeshHeader *mesh)
+{ return vrapi_GetHandMesh(ovr, hand, mesh); }
+
 VRAPI_EXTRA_EXPORT ovrResult
 vrapi_GetCurrentInputState2(ovrMobile *ovr, const ovrDeviceID deviceID, ovrInputStateHeader *inputState)
 {

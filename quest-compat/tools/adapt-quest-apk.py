@@ -114,7 +114,7 @@ def elf_symbols(readelf, path, undefined):
         if (fields[6] == 'UND') != undefined or fields[4] not in ['GLOBAL', 'WEAK']:
             continue
         symbol = fields[7].split('@')[0]
-        if symbol.startswith('vrapi_'):
+        if symbol.startswith('vrapi_') or (symbol.startswith('_Z') and 'vrapi_' in symbol):
             result.add(symbol)
     return result
 
