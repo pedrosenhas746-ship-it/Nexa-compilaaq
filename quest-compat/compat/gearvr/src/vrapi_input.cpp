@@ -175,10 +175,14 @@ vrapi_GetInputDeviceCapabilities(ovrMobile *ovr, ovrInputCapabilityHeader *capsH
 }
 
 ovrResult
-vrapi_SetHapticVibrationSimple(ovrMobile *, const ovrDeviceID, const float)
+vrapi_SetHapticVibrationSimple(ovrMobile *ovr, const ovrDeviceID deviceID, const float amplitude)
 {
-	VRAPI_TRACE("vrapi_SetHapticVibrationSimple");
-	return ovrSuccess;
+    VRAPI_TRACE("vrapi_SetHapticVibrationSimple");
+    if (!ovr) return ovrError_InvalidParameter;
+    std::lock_guard<std::recursive_mutex> guard(global().lock);
+    int hand = deviceID == kLeftDevice ? 0 : deviceID == kRightDevice ? 1 : -1;
+    if (hand < 0) return ovrError_NoDevice;
+    return global().backend.vibrate(hand, amplitude) ? ovrSuccess : ovrError_NotImplemented;
 }
 
 ovrResult

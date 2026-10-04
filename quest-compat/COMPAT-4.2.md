@@ -1,0 +1,15 @@
+# NEXA Quest Bridge 4.2 — experimental compatibility
+
+This release does not implement universal Quest emulation. No commercial game gameplay is confirmed.
+
+- The importer accepts auditable ARM ELF shared libraries without section headers by reading PT_DYNAMIC, DT_HASH or DT_GNU_HASH. Genuine invalid headers remain rejected; errors identify the library, ABI, header and byte count. The Gorn APK was not supplied, so this is not a confirmed Gorn fix.
+- Optional Unity OpenXR profile preparation reads bounded UnityFS v7 / Unity 2020–2021 bundles and serialized formats 17–22 without type trees. It activates existing Oculus Touch and Khronos Simple profiles and disables recognized optional PICO 1.0.0 features with no extension requirements. It never adds missing code or edits licenses. Required or unknown features remain untouched. Limits: 64 MiB compressed bundle, 256 MiB declared expanded data, 16 MiB individual block/settings file. Only blocks intersecting the settings file are decompressed/recompressed; game scenes remain unchanged. Failures preserve the input and generate a warning.
+- VrApi now suggests both Touch and portable Simple controller bindings; initialization checks Android/GLES extensions; head pose can be derived from valid runtime eye poses when VIEW-space data is unavailable. Recenter creates a new LOCAL reference space. Simple haptics call the runtime. These paths require physical runtime/game tests. Vulkan in the VrApi adapter and hand skeleton APIs remain unsupported.
+- Launcher checks the actual native ABI intersection, offers runtime installation and an isolated OpenXR discovery/system/graphics requirements probe. Phone sensor readings are explicitly separate from in-game tracking. Probe results never claim rendering, controller or gameplay success.
+- Import, runtime, and crash diagnostics are collected together. Native loader runs in a separate process for the probe.
+
+Tester flow: configure runtime; import a full APK; for the supplied Granny Pico build enable the optional Unity profiles checkbox; install the copy; launch from NEXA. If the camera remains frozen, run Verify runtime and copy its report.
+
+The PhoneXR installer bundled in the delivered APK is the unchanged runtime previously supplied by the user, SHA-256 56dd0f53317e1e70d240d4de39217f7553011a04b1d4cf22a637de6d1ebf7fa8. It is added locally to the signed deliverable and is not committed here. Its complete build sources are absent from this project. The own VrApi driver is built in CI.
+
+Validation: host regression tests exercise stripped ELF SysV/GNU hashes, malformed offsets, ABI mismatch, bounded Unity feature edits, preservation of required features, idempotence and bundle rebuild. Android API 29/34/35 tests cover startup and local signing. An x86_64 probe must report absent runtime without a native crash. These are not Quest gameplay tests.

@@ -19,5 +19,6 @@ public final class StartupTest {
     }
     @Test public void phoneMenuOpensWithoutSensorOrScanStartup()throws Exception{opens(HomeActivity.class);}
     @Test public void vrMenuAndBackgroundScanStayOpen()throws Exception{opens(MainActivity.class);}
+    @Test public void runtimeSetupOpens()throws Exception{opens(RuntimeSetupActivity.class);}
     @Test public void importScreenOpens()throws Exception{opens(com.nexa.xr.importer.ImportActivity.class);}
 }

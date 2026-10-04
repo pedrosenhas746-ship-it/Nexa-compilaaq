@@ -116,6 +116,8 @@ public:
 
 	// vrapi_GetPredictedTracking2: head and eye poses at the given display time.
 	bool locate_eyes(XrTime time, Pose &head, std::array<Eye, 2> &eyes);
+	bool recenter();
+	bool vibrate(int hand, float amplitude);
 
 	// vrapi_CreateTextureSwapChain3 / GetTextureSwapChainHandle.
 	Swapchain *create_swapchain(int32_t width, int32_t height, int64_t gl_format, uint32_t samples);
@@ -145,6 +147,7 @@ private:
 	XrSession session_ = XR_NULL_HANDLE;
 	XrSpace local_space_ = XR_NULL_HANDLE;
 	XrSpace view_space_ = XR_NULL_HANDLE;
+	XrPosef local_origin_{{0, 0, 0, 1}, {0, 0, 0}};
 	XrSessionState state_ = XR_SESSION_STATE_UNKNOWN;
 	bool running_ = false;
 	bool frame_begun_ = false;
@@ -167,6 +170,7 @@ private:
 	XrAction secondary_ = XR_NULL_HANDLE;
 	XrAction menu_ = XR_NULL_HANDLE;
 	XrAction thumbstick_ = XR_NULL_HANDLE;
+	XrAction haptic_ = XR_NULL_HANDLE;
 	std::array<XrSpace, 2> grip_spaces_{};
 	std::array<XrSpace, 2> aim_spaces_{};
 	std::array<Controller, 2> controllers_{};

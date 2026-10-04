@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(nexa_runtime_probe LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(OpenXR REQUIRED CONFIG)
+add_library(nexa_runtime_probe SHARED runtime_probe.cpp)
+target_link_libraries(nexa_runtime_probe PRIVATE OpenXR::openxr_loader log)
+target_compile_options(nexa_runtime_probe PRIVATE -Wall -Wextra -Wno-missing-field-initializers)
+target_link_options(nexa_runtime_probe PRIVATE -Wl,--no-undefined)

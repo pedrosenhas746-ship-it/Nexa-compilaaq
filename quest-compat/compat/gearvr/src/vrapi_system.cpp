@@ -389,9 +389,13 @@ vrapi_SetTrackingTransform(ovrMobile *, ovrPosef)
 	VRAPI_TRACE("vrapi_SetTrackingTransform");}
 
 void
-vrapi_RecenterPose(ovrMobile *)
+vrapi_RecenterPose(ovrMobile *ovr)
 {
-	VRAPI_TRACE("vrapi_RecenterPose");}
+	VRAPI_TRACE("vrapi_RecenterPose");
+    if (!ovr) return;
+    std::lock_guard<std::recursive_mutex> guard(global().lock);
+    if (!global().backend.recenter()) VRAPI_WARN("Recenter unavailable: runtime has no valid head pose");
+}
 
 ovrResult
 vrapi_GetBoundaryGeometry(ovrMobile *, const uint32_t, uint32_t *pointsCountOutput, ovrVector3f *)

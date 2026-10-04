@@ -18,6 +18,7 @@ public final class ImportActivity extends Activity {
     private static final int PICK=81,ALLOW_INSTALL=82;
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private TextView status;
+    private CheckBox profiles;
     private Button choose,install,launch;
     private ProgressBar progress;
     private File folder,input,prepared;
@@ -30,6 +31,7 @@ public final class ImportActivity extends Activity {
         ScrollView scroll=new ScrollView(this);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);int p=(int)(20*getResources().getDisplayMetrics().density);box.setPadding(p,p,p,p);box.setBackgroundColor(Color.rgb(8,15,25));scroll.addView(box);
         TextView title=new TextView(this);title.setText("Importar jogo do Quest");title.setTextSize(25);title.setTextColor(Color.WHITE);box.addView(title);
         TextView intro=new TextView(this);intro.setText("Selecione um APK completo. O NEXA verifica o celular, prepara uma cópia e abre o instalador do Android. Compatibilidade experimental.");intro.setTextColor(Color.LTGRAY);intro.setTextSize(16);intro.setPadding(0,p/2,0,p/2);box.addView(intro);
+        profiles=new CheckBox(this);profiles.setText("Preparar perfis OpenXR do Unity (experimental)");profiles.setTextColor(Color.WHITE);box.addView(profiles);
         choose=button(box,"1. Selecionar APK",v->pick());
         install=button(box,"2. Instalar cópia",v->install());install.setEnabled(false);
         launch=button(box,"Abrir no NEXA",v->openNexa());launch.setEnabled(false);
@@ -40,11 +42,11 @@ public final class ImportActivity extends Activity {
     private void pick(){if(busy)return;Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");startActivityForResult(i,PICK);}
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==PICK&&result==RESULT_OK&&data!=null&&data.getData()!=null)read(data.getData());else if(request==ALLOW_INSTALL&&prepared!=null&&!busy) { if(getPackageManager().canRequestPackageInstalls()) install(); else status.setText("Permita instalar apps desta fonte nas configurações para continuar."); }}
     private void read(Uri uri){
-        analysis=null;prepared=null;installedPackage=null;setBusy(true);status.setText("Copiando APK…");
+        boolean genericProfiles=profiles.isChecked();analysis=null;prepared=null;installedPackage=null;setBusy(true);status.setText("Copiando APK…");
         worker.execute(()->{try{
             for(File f:folder.listFiles()==null?new File[0]:folder.listFiles())if(f.isFile())f.delete();
             File file=new File(folder,"source.apk");try(InputStream in=getContentResolver().openInputStream(uri);OutputStream out=new BufferedOutputStream(new FileOutputStream(file))){if(in==null)throw new IOException("Arquivo inacessível");ApkRewriter.copy(in,out,8L*1024*1024*1024);}
-            input=file;analysis=importer.inspect(input,this::message);
+            input=file;analysis=importer.inspect(input,this::message,genericProfiles);
             prepared=importer.prepare(input,analysis,this::message);
             ui(()->{setBusy(false);status.setText("Adaptação automática concluída e assinatura verificada.\n\n"+analysis.summary()+"\n\nToque em Instalar cópia para testar.");});
         }catch(Exception e){fail(e);}});
@@ -77,10 +79,10 @@ public final class ImportActivity extends Activity {
         else{status.setText("Instalação não concluída: "+i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)+"\n\nSe houver original com outra assinatura, o Android impede a atualização. Seus saves não foram removidos.");}
     }
     private void openNexa(){Intent i=new Intent(this,HomeActivity.class);i.putExtra("nexa.select_package",installedPackage);i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);startActivity(i);finish();}
-    private void setBusy(boolean value){busy=value;choose.setEnabled(!value);install.setEnabled(!value&&prepared!=null);launch.setEnabled(!value&&installedPackage!=null);progress.setVisibility(value?View.VISIBLE:View.GONE);}
+    private void setBusy(boolean value){busy=value;profiles.setEnabled(!value);choose.setEnabled(!value);install.setEnabled(!value&&prepared!=null);launch.setEnabled(!value&&installedPackage!=null);progress.setVisibility(value?View.VISIBLE:View.GONE);}
     private void ui(Runnable r){runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())r.run();});}
     private void message(String m){ui(()->status.setText(m));}
-    private void fail(Exception e){ui(()->{setBusy(false);status.setText("Não foi possível preparar: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage()));});}
+    private void fail(Exception e){android.util.Log.e("NEXA","APK import failed",e);com.nexa.xr.RuntimeDiagnostics.write(this,"last-import.txt",e.toString());ui(()->{setBusy(false);status.setText("Não foi possível preparar: "+(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage()));});}
     @Override protected void onDestroy(){
         worker.shutdownNow();
         if(isFinishing()&&folder!=null) {

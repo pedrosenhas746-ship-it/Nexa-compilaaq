@@ -23,13 +23,15 @@ public final class DeviceApkImporter {
         public final Set<String> abis=new LinkedHashSet<>();
         public final Map<String,File> replacements=new LinkedHashMap<>();
         public byte[] manifest;
-        public int imports;
-        public String summary(){return packageName+"\n"+route+" • "+abi+"\n"+imports+" símbolos VrApi verificados\n\n"+String.join("\n\n",warnings);}
+        public int imports, xrImports;
+        public final List<String> profileChanges=new ArrayList<>();
+        public String summary(){return packageName+"\n"+route+" • "+abi+"\n"+imports+" símbolos VrApi / "+xrImports+" OpenXR verificados\n\n"+String.join("\n\n",warnings);}
     }
     private final Context context;
     private final File folder;
     public DeviceApkImporter(Context context,File folder){this.context=context;this.folder=folder;}
-    public Analysis inspect(File input,Progress progress)throws Exception {
+    public Analysis inspect(File input,Progress progress)throws Exception { return inspect(input,progress,false); }
+    public Analysis inspect(File input,Progress progress,boolean genericProfiles)throws Exception {
         Analysis a=new Analysis();
         try(ZipFile apk=new ZipFile(input)) {
             Set<String> names=new HashSet<>();long expanded=0;
@@ -53,11 +55,12 @@ public final class DeviceApkImporter {
             for(String abi:Build.SUPPORTED_ABIS)if(a.abis.contains(abi)){a.abi=abi;break;}
             if(a.abi==null)throw new IOException("ABI incompatível: APK "+a.abis+" / celular "+Arrays.toString(Build.SUPPORTED_ABIS));
             if(!a.abi.equals("arm64-v8a")&&!a.abi.equals("armeabi-v7a"))throw new IOException("Esta versão oferece runtime ARM32/ARM64");
-            for(String abi:a.abis)if(!abi.equals("arm64-v8a")&&!abi.equals("armeabi-v7a"))throw new IOException("APK multi-arquitetura contém ABI sem adaptador: "+abi);
+
             boolean vrapi=names.contains("lib/"+a.abi+"/libvrapi.so"),openxr=names.contains("lib/"+a.abi+"/libopenxr_loader.so");
             if(!vrapi&&!openxr)throw new IOException("Nenhum loader VrApi/OpenXR separado encontrado. Runtime embutido exige análise específica");
             a.route=vrapi?"VrApi → PhoneXR (experimental)":"OpenXR → PhoneXR (experimental)";
             for(String abi:a.abis) {
+                if(!abi.equals("arm64-v8a")&&!abi.equals("armeabi-v7a"))continue;
                 boolean hasVr=names.contains("lib/"+abi+"/libvrapi.so"),hasXr=names.contains("lib/"+abi+"/libopenxr_loader.so");
                 if(hasVr!=vrapi||(!vrapi&&!hasXr))throw new IOException("APIs diferentes entre ABIs: preparação específica necessária");
                 Set<String> required=new TreeSet<>(), requiredXr=new TreeSet<>();
@@ -65,27 +68,46 @@ public final class DeviceApkImporter {
                 for(String n:names)if(n.startsWith("lib/"+abi+"/")&&n.endsWith(".so")&&!n.endsWith("/libvrapi.so")&&!n.endsWith("/libopenxr_loader.so")) {
                     progress.update("Analisando "+n.substring(n.lastIndexOf('/')+1)+" • "+abi);
                     try(InputStream in=apk.getInputStream(apk.getEntry(n));OutputStream out=new BufferedOutputStream(new FileOutputStream(temp))){ApkRewriter.copy(in,out,apk.getEntry(n).getSize());}
-                    for(String s:ElfSymbols.read(temp,abi).imports) { if(s.contains("vrapi_")) required.add(s); else if(s.matches("xr[A-Z].*")) requiredXr.add(s); }
+                    for(String s:audit(temp,abi,n).imports) { if(s.contains("vrapi_")) required.add(s); else if(s.matches("xr[A-Z].*")) requiredXr.add(s); }
                 }
                 temp.delete();
                 if(vrapi){File lib=asset(abi,"libvrapi.so");Set<String>missing=new TreeSet<>(required);missing.removeAll(ElfSymbols.read(lib,abi).exports);if(!missing.isEmpty())throw new IOException("VrApi ainda sem funções: "+missing);a.replacements.put("lib/"+abi+"/libvrapi.so",lib);a.imports+=required.size();}
                 File xr=asset(abi,"libopenxr_loader.so");
                 Set<String> missingXr=new TreeSet<>(requiredXr);missingXr.removeAll(ElfSymbols.read(xr,abi).exports);
                 if(!missingXr.isEmpty())throw new IOException("OpenXR ainda sem funções: "+missingXr);
-                a.replacements.put("lib/"+abi+"/libopenxr_loader.so",xr);
+                a.replacements.put("lib/"+abi+"/libopenxr_loader.so",xr);a.xrImports+=requiredXr.size();
             }
             a.manifest=xml.adapt();
+            if(genericProfiles&&!vrapi) {
+                ZipEntry settings=apk.getEntry("assets/bin/Data/data.unity3d");
+                if(settings!=null) {
+                    progress.update("Verificando perfis OpenXR do Unity…");
+                    try {
+                        if(settings.getSize()>64L*1024*1024)throw new IOException("Bundle acima do limite desta opção");
+                        byte[] data;try(InputStream in=apk.getInputStream(settings)){data=ApkRewriter.readBounded(in,64*1024*1024);}
+                        UnityOpenXrProfiles.Result result=UnityOpenXrProfiles.adapt(data);
+                        if(!result.changes.isEmpty()) {
+                            File changed=new File(folder,"unity-openxr-settings.bundle");try(OutputStream out=new FileOutputStream(changed)){out.write(result.data);}
+                            a.replacements.put(settings.getName(),changed);a.profileChanges.addAll(result.changes);
+                            a.warnings.add("Perfis OpenXR experimentais: "+String.join(", ",result.changes)+". Somente configurações reconhecidas foram alteradas; precisam de teste no jogo.");
+                        }else a.warnings.add("Nenhum perfil Unity elegível encontrado. As configurações foram preservadas.");
+                    }catch(IOException e){a.warnings.add("Perfis Unity preservados: "+e.getMessage());}
+                }
+            }
             try{context.getPackageManager().getPackageInfo(a.packageName,0);a.warnings.add("Já existe uma instalação com este pacote. Uma assinatura diferente impede atualizar. Use um perfil/aparelho de teste para preservar o original e seus saves.");}catch(android.content.pm.PackageManager.NameNotFoundException ignored){}
             a.warnings.add("A adaptação não garante que o jogo abra: imagem, desempenho e controles precisam de teste. Vulkan no caminho VrApi, hand tracking nativo e serviços Meta ainda não estão implementados.");
             a.warnings.add("Arquivos OBB, dados externos e splits não são importados nesta versão. Se o jogo depende deles, o APK sozinho não basta.");
-            a.warnings.add("A cópia será assinada por uma chave local do NEXA. Assets e DEX são preservados. Validação de licença e serviços online continuam sujeitos às exigências do jogo.");
+            a.warnings.add("A cópia será assinada por uma chave local do NEXA. DEX e arquivos do jogo são preservados, exceto as configurações Unity explicitamente listadas quando a opção de perfis está ativa. Validação de licença e serviços online continuam sujeitos às exigências do jogo.");
             return a;
         }
+    }
+    private static ElfSymbols audit(File file,String abi,String name)throws IOException {
+        try{return ElfSymbols.read(file,abi);}catch(IOException e){throw new IOException(name+" ["+abi+"]: "+e.getMessage(),e);}
     }
     private File asset(String abi,String name)throws IOException {
         File f=new File(folder,abi+"-"+name);
         try(InputStream in=context.getAssets().open("quest-runtime/"+abi+"/"+name);OutputStream out=new BufferedOutputStream(new FileOutputStream(f))){ApkRewriter.copy(in,out,16*1024*1024);}
-        ElfSymbols.read(f,abi);return f;
+        audit(f,abi,"adaptador NEXA/"+name);return f;
     }
     public File prepare(File input,Analysis a,Progress progress)throws Exception {
         File unsigned=new File(folder,"unsigned.apk"),signed=new File(folder,"prepared.apk");

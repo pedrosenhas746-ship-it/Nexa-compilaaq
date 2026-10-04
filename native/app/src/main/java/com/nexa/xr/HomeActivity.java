@@ -25,10 +25,12 @@ public final class HomeActivity extends Activity {
         super.onCreate(state);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(8,15,25));
         int pad=(int)(16*getResources().getDisplayMetrics().density);root.setPadding(pad,pad,pad,pad);
-        TextView title=new TextView(this);title.setText("NEXA Quest Bridge v4.1");title.setTextColor(Color.WHITE);title.setTextSize(24);root.addView(title);
+        TextView title=new TextView(this);title.setText("NEXA Quest Bridge v4.2");title.setTextColor(Color.WHITE);title.setTextSize(24);root.addView(title);
         button(root,"IMPORTAR APK",v->startActivity(new Intent(this,ImportActivity.class)));
         scan=button(root,"BUSCAR JOGOS INSTALADOS",v->scanApps());
         launch=button(root,"EXECUTAR SELECIONADO",v->launchSelected());launch.setEnabled(false);
+        button(root,"CONFIGURAR RUNTIME",v->startActivity(new Intent(this,RuntimeSetupActivity.class)));
+        button(root,"VERIFICAR RUNTIME",v->{UniversalRuntimeManager runtime=new UniversalRuntimeManager(this);if(!runtime.launchRuntimeProbe())status.setText(runtime.lastError());});
         button(root,"MENU VR",v->startActivity(new Intent(this,MainActivity.class)));
         button(root,"COPIAR DIAGNÓSTICO",v->copyDiagnostic());
         status=new TextView(this);status.setTextColor(Color.WHITE);status.setTextSize(15);status.setTextIsSelectable(true);status.setPadding(0,pad/2,0,pad/2);root.addView(status);
@@ -62,9 +64,7 @@ public final class HomeActivity extends Activity {
     }
     private void showError(String message,Exception error){android.util.Log.e("NEXA",message,error);runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())status.setText(message+": "+error);});}
     private void copyDiagnostic(){
-        String report="NEXA 23.4.1\nDevice: "+android.os.Build.MANUFACTURER+" "+android.os.Build.MODEL+"\nAndroid: "+android.os.Build.VERSION.RELEASE+" / API "+android.os.Build.VERSION.SDK_INT+"\nStatus: "+status.getText();
-        File crash=new File(getFilesDir(),"last-crash.txt");
-        try {if(crash.isFile()){try(InputStream in=new FileInputStream(crash)){report=new String(com.nexa.xr.importer.ApkRewriter.readBounded(in,256*1024),StandardCharsets.UTF_8);}}}catch(IOException e){report+="\nReport read: "+e;}
+        String report=RuntimeDiagnostics.collect(this,status.getText().toString());
         ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("NEXA diagnóstico",report));Toast.makeText(this,"Diagnóstico copiado",Toast.LENGTH_SHORT).show();
     }
     @Override protected void onDestroy(){worker.shutdownNow();super.onDestroy();}

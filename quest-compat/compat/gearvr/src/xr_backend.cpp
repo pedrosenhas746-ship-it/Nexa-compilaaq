@@ -3,6 +3,8 @@
 #include <android/log.h>
 
 #include <cstdio>
+#include <cmath>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -93,11 +95,14 @@ XrBackend::initialize_impl(JavaVM *vm, jobject activity)
 	result = xrEnumerateInstanceExtensionProperties(nullptr, available_count, &available_count, available.data());
 	if (XR_FAILED(result) || available_count > available.size()) return false;
 	available.resize(available_count);
-	bool has_timespec = false;
+	bool has_timespec = false, has_android = false, has_gles = false;
 	for (const XrExtensionProperties &extension : available) {
 		has_timespec |= std::strcmp(extension.extensionName, XR_KHR_CONVERT_TIMESPEC_TIME_EXTENSION_NAME) == 0;
+        has_android |= std::strcmp(extension.extensionName, XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME) == 0;
+        has_gles |= std::strcmp(extension.extensionName, XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME) == 0;
 	}
 
+	if (!has_android || !has_gles) { LOG("Runtime missing required Android/GLES extensions: android=%d GLES=%d", has_android, has_gles); return false; }
 	if (!has_timespec) { LOG("Runtime lacks clock conversion required by the VrApi adapter"); return false; }
 	std::vector<const char *> extensions = {XR_KHR_ANDROID_CREATE_INSTANCE_EXTENSION_NAME,
 	                                        XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME};
@@ -190,7 +195,8 @@ XrBackend::create_actions()
 	menu_ = make_action(action_set_, XR_ACTION_TYPE_BOOLEAN_INPUT, "menu", "Menu", hands_.data());
 	thumbstick_ = make_action(action_set_, XR_ACTION_TYPE_VECTOR2F_INPUT, "thumbstick", "Thumbstick", hands_.data());
 
-	for (XrAction action : {grip_pose_, aim_pose_, trigger_, squeeze_, primary_, secondary_, menu_, thumbstick_}) {
+	haptic_ = make_action(action_set_, XR_ACTION_TYPE_VIBRATION_OUTPUT, "haptic", "Haptic", hands_.data());
+	for (XrAction action : {haptic_, grip_pose_, aim_pose_, trigger_, squeeze_, primary_, secondary_, menu_, thumbstick_}) {
 		if (action == XR_NULL_HANDLE) return false;
 	}
 	// Request a standard interaction profile; the runtime must actually supply inputs.
@@ -211,15 +217,31 @@ XrBackend::create_actions()
 	    {menu_, path(instance_, "/user/hand/left/input/menu/click")},
 	    {thumbstick_, path(instance_, "/user/hand/left/input/thumbstick")},
 	    {thumbstick_, path(instance_, "/user/hand/right/input/thumbstick")},
+        {haptic_, path(instance_, "/user/hand/left/output/haptic")},
+        {haptic_, path(instance_, "/user/hand/right/output/haptic")},
 	};
 	XrInteractionProfileSuggestedBinding suggested{XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING};
 	suggested.interactionProfile = path(instance_, profile);
 	suggested.countSuggestedBindings = static_cast<uint32_t>(bindings.size());
 	suggested.suggestedBindings = bindings.data();
-	result = xrSuggestInteractionProfileBindings(instance_, &suggested);
-	if (XR_FAILED(result)) {
-		return FAIL(result, "xrSuggestInteractionProfileBindings");
-	}
+    const XrResult touch_result = xrSuggestInteractionProfileBindings(instance_, &suggested);
+    // Also bind the portable profile for runtimes whose devices aren't Oculus Touch.
+    std::vector<XrActionSuggestedBinding> simple;
+    for (const char *hand : {"left", "right"}) {
+        const std::string prefix = std::string("/user/hand/") + hand;
+        simple.push_back({grip_pose_, path(instance_, (prefix + "/input/grip/pose").c_str())});
+        simple.push_back({aim_pose_, path(instance_, (prefix + "/input/aim/pose").c_str())});
+        simple.push_back({primary_, path(instance_, (prefix + "/input/select/click").c_str())});
+        simple.push_back({trigger_, path(instance_, (prefix + "/input/select/click").c_str())});
+        simple.push_back({menu_, path(instance_, (prefix + "/input/menu/click").c_str())});
+        simple.push_back({haptic_, path(instance_, (prefix + "/output/haptic").c_str())});
+    }
+    suggested.interactionProfile = path(instance_, "/interaction_profiles/khr/simple_controller");
+    suggested.countSuggestedBindings = static_cast<uint32_t>(simple.size());suggested.suggestedBindings = simple.data();
+    const XrResult simple_result = xrSuggestInteractionProfileBindings(instance_, &suggested);
+    if (XR_FAILED(touch_result)) LOG("Touch bindings rejected: %d", static_cast<int>(touch_result));
+    if (XR_FAILED(simple_result)) LOG("Simple bindings rejected: %d", static_cast<int>(simple_result));
+    if (XR_FAILED(touch_result) && XR_FAILED(simple_result)) return false;
 	return true;
 }
 
@@ -239,7 +261,8 @@ XrBackend::begin_session(EGLDisplay display, EGLConfig config, EGLContext contex
 	}
 
 	XrReferenceSpaceCreateInfo space{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};
-	space.poseInReferenceSpace.orientation.w = 1;
+	local_origin_ = {{0, 0, 0, 1}, {0, 0, 0}};
+	space.poseInReferenceSpace = local_origin_;
 	space.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_LOCAL;
 	if (XR_FAILED(xrCreateReferenceSpace(session_, &space, &local_space_))) { end_session(); return false; }
 	space.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_VIEW;
@@ -414,7 +437,60 @@ XrBackend::locate_eyes(XrTime time, Pose &head, std::array<Eye, 2> &eyes)
 		eyes[eye].pose.position_tracked = eyes[eye].pose.position_valid && (state.viewStateFlags & XR_VIEW_STATE_POSITION_TRACKED_BIT) != 0;
 		eyes[eye].fov = views[eye].fov;
 	}
-	return valid;
+    if (valid && !head.valid) {
+        // Some runtimes supply view poses without a separate VIEW-space pose.
+        // Derive the head from actual eye data; never claim sensor data that wasn't valid.
+        const auto &a = views[0].pose.orientation; const auto &b = views[1].pose.orientation;
+        const float sign = a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w < 0 ? -1.0f : 1.0f;
+        XrQuaternionf q{a.x+sign*b.x,a.y+sign*b.y,a.z+sign*b.z,a.w+sign*b.w};
+        const float length = std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);
+        if (length > 1e-6f) {
+            head.orientation = {q.x/length,q.y/length,q.z/length,q.w/length};head.valid = true;
+            head.orientation_tracked = eyes[0].pose.orientation_tracked && eyes[1].pose.orientation_tracked;
+            head.position_valid = eyes[0].pose.position_valid && eyes[1].pose.position_valid;
+            head.position_tracked = eyes[0].pose.position_tracked && eyes[1].pose.position_tracked;
+            if (head.position_valid) head.position = {(views[0].pose.position.x+views[1].pose.position.x)*0.5f,
+                (views[0].pose.position.y+views[1].pose.position.y)*0.5f,(views[0].pose.position.z+views[1].pose.position.z)*0.5f};
+        }
+    }
+    return valid;
+}
+
+bool
+XrBackend::recenter()
+{
+    if (!has_session()) return false;
+    const Pose pose = locate(view_space_, to_xr_time(monotonic_seconds()));
+    if (!pose.valid) return false;
+    const auto &q = pose.orientation;
+    const float yaw = std::atan2(2*(q.x*q.z+q.w*q.y), 1-2*(q.x*q.x+q.y*q.y));
+    const float sy = std::sin(yaw*0.5f), cy = std::cos(yaw*0.5f);
+    const auto &a = local_origin_.orientation;
+    XrReferenceSpaceCreateInfo info{XR_TYPE_REFERENCE_SPACE_CREATE_INFO};info.referenceSpaceType=XR_REFERENCE_SPACE_TYPE_LOCAL;
+    info.poseInReferenceSpace.orientation={a.x*cy-a.z*sy,a.w*sy+a.y*cy,a.x*sy+a.z*cy,a.w*cy-a.y*sy};
+    info.poseInReferenceSpace.position=local_origin_.position;
+    if (pose.position_valid) {
+        const XrVector3f v=pose.position;
+        const XrVector3f t{2*(a.y*v.z-a.z*v.y),2*(a.z*v.x-a.x*v.z),2*(a.x*v.y-a.y*v.x)};
+        info.poseInReferenceSpace.position.x+=v.x+a.w*t.x+(a.y*t.z-a.z*t.y);
+        info.poseInReferenceSpace.position.y+=v.y+a.w*t.y+(a.z*t.x-a.x*t.z);
+        info.poseInReferenceSpace.position.z+=v.z+a.w*t.z+(a.x*t.y-a.y*t.x);
+    }
+    XrSpace space=XR_NULL_HANDLE;
+    if (XR_FAILED(xrCreateReferenceSpace(session_,&info,&space))) return false;
+    xrDestroySpace(local_space_);local_space_=space;local_origin_=info.poseInReferenceSpace;
+    return true;
+}
+
+bool
+XrBackend::vibrate(int hand, float amplitude)
+{
+    if (hand<0 || hand>1 || !has_session() || state_!=XR_SESSION_STATE_FOCUSED || !std::isfinite(amplitude)) return false;
+    XrHapticActionInfo info{XR_TYPE_HAPTIC_ACTION_INFO};info.action=haptic_;info.subactionPath=hands_[hand];
+    if (amplitude<=0) return XR_SUCCEEDED(xrStopHapticFeedback(session_,&info));
+    XrHapticVibration vibration{XR_TYPE_HAPTIC_VIBRATION};vibration.amplitude=std::clamp(amplitude,0.0f,1.0f);
+    vibration.duration=50000000;vibration.frequency=XR_FREQUENCY_UNSPECIFIED;
+    return XR_SUCCEEDED(xrApplyHapticFeedback(session_,&info,reinterpret_cast<const XrHapticBaseHeader*>(&vibration)));
 }
 
 Pose

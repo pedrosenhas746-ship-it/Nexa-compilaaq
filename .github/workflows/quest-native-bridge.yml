@@ -28,6 +28,14 @@ jobs:
           python3 quest-compat/tools/extract-sdk-headers.py /tmp/vrapi-sdk.zip /tmp/vrapi-sdk
       - name: Host tests
         run: python3 -m unittest discover -s quest-compat/tests -v
+      - name: ELF and Unity settings host regressions
+        run: |
+          curl --fail --location --retry 3 -o /tmp/lz4-java.jar https://repo.maven.apache.org/maven2/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar
+          echo 'd74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef  /tmp/lz4-java.jar' | sha256sum -c -
+          mkdir -p /tmp/compat-tests
+          javac -cp /tmp/lz4-java.jar -d /tmp/compat-tests native/app/src/main/java/com/nexa/xr/importer/ElfSymbols.java native/app/src/main/java/com/nexa/xr/importer/UnityOpenXrProfiles.java quest-compat/tests/java/ElfAuditTest.java quest-compat/tests/java/UnityProfilesTest.java
+          java -cp /tmp/compat-tests:/tmp/lz4-java.jar ElfAuditTest
+          java -cp /tmp/compat-tests:/tmp/lz4-java.jar com.nexa.xr.importer.UnityProfilesTest
       - name: Build own VrApi library and driver
         working-directory: quest-compat/android
         run: gradle --no-daemon --stacktrace :legacy-driver:assembleDebug -PvrapiRoot=/tmp/vrapi-sdk/VrApi
@@ -44,6 +52,10 @@ jobs:
                       path.parent.mkdir(parents=True, exist_ok=True)
                       path.write_bytes(apk.read(f'lib/{abi}/{name}'))
           PYCODE
+      - name: Bundle own driver installer
+        run: |
+          mkdir -p native/app/src/main/assets/runtime
+          cp quest-compat/android/legacy-driver/build/outputs/apk/debug/legacy-driver-debug.apk native/app/src/main/assets/runtime/vrapi-driver.apk
       - name: Build NEXA launcher
         working-directory: native
         run: gradle --no-daemon --stacktrace :app:assembleDebug :app:assembleAndroidTest
@@ -80,7 +92,7 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: NEXA-Quest-Bridge-v4.1
+          name: NEXA-Quest-Bridge-v4.2
           path: out/*
           if-no-files-found: error
           retention-days: 30
@@ -120,10 +132,16 @@ jobs:
             adb install $(find apks -name app-debug.apk)
             adb install $(find apks -name app-debug-androidTest.apk)
             adb shell am instrument -w com.nexa.xr.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (4 tests)' device-test.log
+            grep -q 'OK (5 tests)' device-test.log
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.HomeActivity
             adb shell screencap -p /sdcard/nexa-home.png
             adb pull /sdcard/nexa-home.png nexa-home.png
+            adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.RuntimeProbeActivity
+            for attempt in $(seq 1 30); do
+              if adb shell run-as com.nexa.xr.debug cat files/runtime-last.txt > runtime-probe.txt 2>/dev/null; then break; fi
+              sleep 1
+            done
+            grep -q 'Descobrir extensões do runtime' runtime-probe.txt
             adb logcat -d -b crash > crash-log.txt
       - uses: actions/upload-artifact@v4
         if: always()
@@ -133,3 +151,4 @@ jobs:
             device-test.log
             nexa-home.png
             crash-log.txt
+            runtime-probe.txt

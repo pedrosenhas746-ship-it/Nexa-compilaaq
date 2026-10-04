@@ -70,7 +70,7 @@ public final class UniversalRuntimeManager {
         boolean arm64 = Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a");
         SensorManager sm = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         boolean gyro = sm != null && sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE) != null;
-        boolean rotation = sm != null && sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null;
+        boolean rotation = sm != null && (sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR) != null || sm.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR) != null);
         boolean vulkan = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL);
 
         int gles = 0;
@@ -82,9 +82,30 @@ public final class UniversalRuntimeManager {
         return new DeviceCaps(arm64, gyro, rotation, vulkan, gles);
     }
 
+    public static boolean compatibleAbi(QuestAppProfile p) {
+        if(!p.arm64&&!p.arm32&&!p.x86_64)return true;
+        for(String abi:Build.SUPPORTED_ABIS)if((p.arm64&&abi.equals("arm64-v8a"))||(p.arm32&&abi.equals("armeabi-v7a"))||(p.x86_64&&abi.equals("x86_64")))return true;
+        return false;
+    }
+    public String runtimeSummary() {
+        StringBuilder s=new StringBuilder();
+        for(String pkg:new String[]{PHONE_XR.getPackageName(),VRAPI_DRIVER.getPackageName()}) {
+            try {android.content.pm.PackageInfo info=pm.getPackageInfo(pkg,0);s.append(pkg.equals(PHONE_XR.getPackageName())?"PhoneXR: ":"Driver VrApi: ").append(info.versionName).append(" / código ").append((Build.VERSION.SDK_INT>=28?info.getLongVersionCode():info.versionCode)).append("\n");}
+            catch(PackageManager.NameNotFoundException e){s.append(pkg.equals(PHONE_XR.getPackageName())?"PhoneXR: ausente\n":"Driver VrApi: ausente\n");}
+        }
+        return s.toString();
+    }
+    public boolean launchRuntimeProbe() {
+        error="";
+        ComponentName probe=new ComponentName(context,RuntimeProbeActivity.class);
+        Intent intent=available(PHONE_XR)?new Intent().setComponent(PHONE_XR).putExtra("component",probe.flattenToString()).putExtra("vrapi",false):new Intent().setComponent(probe);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try{context.startActivity(intent);return true;}catch(Exception e){error="Falha ao verificar runtime: "+e;return false;}
+    }
+
     public String compatibilityDecision(QuestAppProfile p, DeviceCaps caps) {
         if (!p.launchable) return "SEM ACTIVITY DE START";
-        if (p.arm64 && !caps.arm64) return "ABI ARM64 INCOMPATIVEL";
+        if (!compatibleAbi(p)) return "ABI incompatível: celular "+Arrays.toString(Build.SUPPORTED_ABIS);
         if (p.vrApi) return available(PHONE_XR) && available(VRAPI_DRIVER)
                 ? "VRAPI EXPERIMENTAL VIA PHONEXR" : "INSTALE PHONEXR + DRIVER VRAPI";
         if (p.openXrLoader) return available(PHONE_XR)
@@ -97,7 +118,7 @@ public final class UniversalRuntimeManager {
     public boolean launch(QuestAppProfile p) {
         error = "";
         DeviceCaps caps = getDeviceCaps();
-        if (!p.launchable || (p.arm64 && !p.arm32 && !caps.arm64)) {
+        if (!p.launchable || !compatibleAbi(p)) {
             error = compatibilityDecision(p, caps);
             return false;
         }
@@ -123,7 +144,7 @@ public final class UniversalRuntimeManager {
             return false;
         }
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        launch.putExtra("nexa_runtime", "quest-bridge-v4");
+        launch.putExtra("nexa_runtime", "quest-bridge-v4.2");
         try {
             context.startActivity(launch);
             return true;
