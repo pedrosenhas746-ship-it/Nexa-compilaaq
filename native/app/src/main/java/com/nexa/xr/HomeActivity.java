@@ -31,6 +31,7 @@ public final class HomeActivity extends Activity {
         launch=button(root,"EXECUTAR SELECIONADO",v->launchSelected());launch.setEnabled(false);
         button(root,"CONFIGURAR RUNTIME",v->startActivity(new Intent(this,RuntimeSetupActivity.class)));
         button(root,"VERIFICAR RUNTIME",v->{UniversalRuntimeManager runtime=new UniversalRuntimeManager(this);if(!runtime.launchRuntimeProbe())status.setText(runtime.lastError());});
+        button(root,"DIAGNÓSTICO DO PHONEXR",v->{try{startActivity(new Intent().setComponent(new ComponentName(RuntimeConnectionCheck.PACKAGE,"org.freedesktop.monado.ipc.NexaDiagnosticActivity")));}catch(Exception e){status.setText("Instale o PhoneXR corrigido em CONFIGURAR RUNTIME para acessar o diagnóstico do servidor. "+e.getMessage());}});
         button(root,"CONTROLES NA TELA",v->controllers());
         button(root,"MENU VR",v->startActivity(new Intent(this,MainActivity.class)));
         button(root,"COPIAR DIAGNÓSTICO",v->copyDiagnostic());

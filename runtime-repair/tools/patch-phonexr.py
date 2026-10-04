@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+import xml.etree.ElementTree as ET
 
 SOURCE_SHA = '56dd0f53317e1e70d240d4de39217f7553011a04b1d4cf22a637de6d1ebf7fa8'
 PREFIX = 'org/freedesktop/monado/ipc/'
@@ -40,7 +41,7 @@ def main():
         run('java','-jar',str(args.apktool),'d','-f',str(args.original),'-o',str(source))
         run('java','-jar',str(args.apktool),'d','-f','-r',str(bootstrap),'-o',str(fixed))
         new_classes=list((fixed/'smali').rglob('*.smali'))
-        if not new_classes or any(not str(p.relative_to(fixed/'smali')).startswith(PREFIX+'Client') for p in new_classes):
+        if not new_classes or any(not any(str(p.relative_to(fixed/'smali')).startswith(PREFIX+allowed) for allowed in ['Client','NexaDiagnosticActivity','NexaRuntimeLogs']) for p in new_classes):
             raise SystemExit('Repair DEX contains unexpected classes; ABI stubs must not ship')
         destination=source/'smali_classes4'/PREFIX
         if not (destination/'Client.smali').is_file():raise SystemExit('Original Client DEX layout changed')
@@ -53,6 +54,13 @@ def main():
         text,count=re.subn(r"(?m)^(\s+versionName:)\s+.*$",r"\1 1.1.1-nexa-ipc",text)
         if count!=1:raise SystemExit('versionName metadata not found')
         config.write_text(text)
+        manifest=source/'AndroidManifest.xml'
+        ET.register_namespace('android','http://schemas.android.com/apk/res/android')
+        xml=ET.parse(manifest)
+        activity=ET.SubElement(xml.getroot().find('application'),'activity')
+        activity.set('{http://schemas.android.com/apk/res/android}name','org.freedesktop.monado.ipc.NexaDiagnosticActivity')
+        activity.set('{http://schemas.android.com/apk/res/android}exported','true')
+        xml.write(manifest,encoding='utf-8',xml_declaration=True)
         rebuilt=root/'rebuilt.apk'
         run('java','-jar',str(args.apktool),'b',str(source),'-o',str(rebuilt))
         changed={'classes4.dex','AndroidManifest.xml'}
