@@ -20,6 +20,7 @@ public final class PhoneXrClientTest {
     private static final class FakeContext extends ContextWrapper implements Closeable {
         final int mode;
         volatile int unbindCount;
+        final CountDownLatch released=new CountDownLatch(1);
         volatile ServiceConnection connection;
         volatile ParcelFileDescriptor sent, remote;
         volatile int flags;
@@ -57,6 +58,7 @@ public final class PhoneXrClientTest {
         @Override public void unbindService(ServiceConnection connection) {
             assertSame(this.connection,connection);
             if(++unbindCount>1)throw new IllegalArgumentException("double unbind");
+            released.countDown();
         }
         @Override public void close() throws IOException { if(remote!=null)remote.close(); }
     }
@@ -67,6 +69,9 @@ public final class PhoneXrClientTest {
             assertEquals(-1,client.blockingConnect(context,PACKAGE));
             assertTrue(client.failed); assertNull(client.monado);
             client.markAsDiscardedByNative();
+            // The callback wakes the waiting native thread before it unbinds outside the monitor.
+            // Wait for that asynchronous cleanup, rather than racing its count increment.
+            if(mode!=REFUSED && mode!=MISSING)assertTrue("binding must be released",context.released.await(1,TimeUnit.SECONDS));
             assertEquals(mode==REFUSED||mode==MISSING?0:1,context.unbindCount);
             if(mode!=SILENT)assertTrue("callback must wake waiter",SystemClock.elapsedRealtime()-start<2000);
             return client;
