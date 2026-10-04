@@ -16,7 +16,7 @@ import static org.junit.Assert.*;
  * Does not replace or emulate the PhoneXR native compositor. */
 public final class PhoneXrClientTest {
     private static final String PACKAGE = RuntimeConnectionCheck.PACKAGE;
-    private static final int OK=0, REFUSED=1, NULL=2, DEAD=3, DISCONNECTED=4, SILENT=5, SERVER_FAIL=6, MISSING=7;
+    private static final int OK=0, REFUSED=1, NULL=2, DEAD=3, DISCONNECTED=4, SILENT=5, SERVER_FAIL=6, MISSING=7, DENIED=8;
     private static final class FakeContext extends ContextWrapper implements Closeable {
         final int mode;
         volatile int unbindCount;
@@ -44,6 +44,7 @@ public final class PhoneXrClientTest {
             this.flags=flags; this.connection=connection;
             assertEquals(new ComponentName(PACKAGE,"org.freedesktop.monado.ipc.MonadoService"), intent.getComponent());
             if(mode==REFUSED)return false;
+            if(mode==DENIED)throw new SecurityException("binding denied");
             if(mode!=SILENT)executor.execute(() -> {
                 ComponentName name=intent.getComponent();
                 if(mode==NULL)connection.onNullBinding(name);
@@ -71,13 +72,14 @@ public final class PhoneXrClientTest {
             client.markAsDiscardedByNative();
             // The callback wakes the waiting native thread before it unbinds outside the monitor.
             // Wait for that asynchronous cleanup, rather than racing its count increment.
-            if(mode!=REFUSED && mode!=MISSING)assertTrue("binding must be released",context.released.await(1,TimeUnit.SECONDS));
-            assertEquals(mode==REFUSED||mode==MISSING?0:1,context.unbindCount);
+            if(mode!=MISSING)assertTrue("binding must be released",context.released.await(1,TimeUnit.SECONDS));
+            assertEquals(mode==MISSING?0:1,context.unbindCount);
             if(mode!=SILENT)assertTrue("callback must wake waiter",SystemClock.elapsedRealtime()-start<2000);
             return client;
         }
     }
-    @Test public void refusedBindingDoesNotUnbindUnregisteredConnection() throws Exception { connectFailure(REFUSED); }
+    @Test public void refusedBindingReleasesRegisteredDispatcherOnce() throws Exception { connectFailure(REFUSED); }
+    @Test public void deniedBindingReleasesRegisteredDispatcherOnce() throws Exception { connectFailure(DENIED); }
     @Test public void missingPackageDoesNotAttemptBinding() throws Exception { connectFailure(MISSING); }
     @Test public void nullBindingWakesWaiterAndUnbindsOnce() throws Exception { connectFailure(NULL); }
     @Test public void bindingDeathWakesWaiterAndUnbindsOnce() throws Exception { connectFailure(DEAD); }

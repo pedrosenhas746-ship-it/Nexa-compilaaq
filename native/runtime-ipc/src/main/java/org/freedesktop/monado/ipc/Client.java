@@ -31,7 +31,7 @@ public class Client implements ServiceConnection {
     // Retain the package context, as in the original client, for the lifetime of the binding.
     private Context runtimePackageContext;
     private ExecutorService callbackExecutor;
-    private boolean bound, attempted, closed;
+    private boolean bindingAttempted, attempted, closed;
 
     @Keep public Client(long nativePointer) {
         nativeCounterpart = new NativeCounterpart(nativePointer);
@@ -52,8 +52,8 @@ public class Client implements ServiceConnection {
             failed |= failure;
             closed = true;
             monado = null;
-            releaseContext = bound ? context : null;
-            bound = false;
+            releaseContext = bindingAttempted ? context : null;
+            bindingAttempted = false;
             releaseFd = fd;
             fd = null;
             releaseExecutor = callbackExecutor;
@@ -141,6 +141,10 @@ public class Client implements ServiceConnection {
                 Intent intent = new Intent("org.freedesktop.monado.ipc.CONNECT")
                         .setComponent(new ComponentName(packageName, "org.freedesktop.monado.ipc.MonadoService"));
                 int flags = Context.BIND_AUTO_CREATE | Context.BIND_IMPORTANT | Context.BIND_ABOVE_CLIENT;
+                // Android tracks the ServiceConnection even on false/SecurityException.
+                // Release it once whenever bindService was attempted, not just when accepted.
+                bindingAttempted = true;
+                boolean accepted;
                 if (Build.VERSION.SDK_INT >= 29) {
                     callbackExecutor = Executors.newSingleThreadExecutor(runnable -> {
                         Thread thread = new Thread(runnable, "PhoneXR-binder");
@@ -148,9 +152,9 @@ public class Client implements ServiceConnection {
                         return thread;
                     });
                     if (Build.VERSION.SDK_INT >= 30) flags |= Context.BIND_INCLUDE_CAPABILITIES;
-                    bound = context.bindService(intent, flags, callbackExecutor, this);
-                } else bound = context.bindService(intent, this, flags);
-                return bound;
+                    accepted = context.bindService(intent, flags, callbackExecutor, this);
+                } else accepted = context.bindService(intent, this, flags);
+                return accepted;
             } catch (PackageManager.NameNotFoundException | RuntimeException e) {
                 Log.e(TAG, "Cannot bind PhoneXR package/service", e);
                 return false;

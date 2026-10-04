@@ -142,7 +142,7 @@ jobs:
             adb install $(find apks -name app-debug-androidTest.apk)
             adb shell appops set com.nexa.xr.debug SYSTEM_ALERT_WINDOW allow
             adb shell am instrument -w com.nexa.xr.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (20 tests)' device-test.log
+            grep -q 'OK (21 tests)' device-test.log
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.HomeActivity
             adb shell screencap -p /sdcard/nexa-home.png
             adb pull /sdcard/nexa-home.png nexa-home.png

@@ -50,19 +50,20 @@ public final class RuntimeConnectionCheck {
             @Override public void onNullBinding(ComponentName name){finish("Serviço retornou Binder nulo");}
             @Override public void onBindingDied(ComponentName name){finish("Ligação com o serviço morreu");}
         };
-        boolean bound=false;
+        boolean bound=false,bindingAttempted=false;
         try {
             ServiceInfo info=context.getPackageManager().getServiceInfo(component,0);
             report.append("Declarado: sim; exportado: ").append(info.exported).append("; habilitado: ").append(info.enabled).append('\n');
             int flags=Context.BIND_AUTO_CREATE|Context.BIND_IMPORTANT|Context.BIND_ABOVE_CLIENT;
             if(Build.VERSION.SDK_INT>=30)flags|=Context.BIND_INCLUDE_CAPABILITIES;
+            bindingAttempted=true;
             bound=context.bindService(new Intent("org.freedesktop.monado.ipc.CONNECT").setComponent(component),connection,flags);
             if(!bound)report.append("Vincular serviço: recusado/não encontrado\n");
             else if(!completed.await(Math.max(1,Math.min(timeoutMillis,5000)),TimeUnit.MILLISECONDS))report.append("Vincular serviço: sem resposta no prazo\n");
             else report.append("Vincular serviço: ").append(result.get()).append('\n');
         }catch(InterruptedException e){Thread.currentThread().interrupt();report.append("Vincular serviço: interrompido\n");}
         catch(Exception e){report.append("Vincular serviço: ").append(e).append('\n');}
-        finally {if(bound)try{context.unbindService(connection);}catch(RuntimeException e){report.append("Liberar ligação: ").append(e).append('\n');}}
+        finally {if(bindingAttempted)try{context.unbindService(connection);}catch(RuntimeException e){report.append("Liberar ligação: ").append(e).append('\n');}}
         report.append("Binder conectado não confirma funcionamento de VR, câmera ou controles.\n");return report.toString();
     }
 }
