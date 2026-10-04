@@ -66,7 +66,9 @@ def main():
         changed={'classes4.dex','AndroidManifest.xml'}
         with zipfile.ZipFile(args.original) as original,zipfile.ZipFile(rebuilt) as build,zipfile.ZipFile(args.output,'w') as output:
             for entry in original.infolist():
-                if entry.filename.upper().startswith('META-INF/'):continue
+                upper=entry.filename.upper()
+                if upper=='STAMP-CERT-SHA256' or (upper.startswith('META-INF/') and
+                    (upper=='META-INF/MANIFEST.MF' or upper.endswith(('.SF','.RSA','.DSA','.EC')))):continue
                 data=build.read(entry.filename) if entry.filename in changed else original.read(entry.filename)
                 output.writestr(entry,data)
         with zipfile.ZipFile(args.original) as original,zipfile.ZipFile(args.output) as output:
