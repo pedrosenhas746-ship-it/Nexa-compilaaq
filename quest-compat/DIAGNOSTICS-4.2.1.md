@@ -1,0 +1,9 @@
+# NEXA 4.2.1 — PhoneXR connection diagnostics
+
+The Moto G85 / Android 16 (API 36) report from 4.2 found extensions but returned XR_ERROR_RUNTIME_UNAVAILABLE (-51) at xrCreateInstance. Granting the runtime overlay permission did not resolve it. The exact underlying failure is still unknown. This build improves observation; it is not a confirmed gameplay fix.
+
+The isolated probe now starts after the activity resumes. It reports runtime package visibility and availability of the ActivityLifecycleListener/Client classes, attempts a bounded Binder connection to the declared MonadoService and releases that connection, then runs the native OpenXR probe. A Binder connection or class load is explicitly not treated as successful XR creation, tracking or gameplay. The native create chain requests supported debug-utils warning/error callbacks and prints symbolic result names. It records each stage before a potentially blocking native call. Recent logs are collected only from the probe's own PID, capped at 120 lines / 24,000 characters and a two-second read deadline; no READ_LOGS permission or cross-app logs are requested. On timeout, stage files and the own-process logs remain copyable. Rotation no longer recreates the probe activity.
+
+Existing import/controller/runtime code is retained. PhoneXR is the unchanged supplied APK. API 29/35/36 instrumentation additionally exercises real Binder and null-binding callbacks, missing-package reporting and collection of a emitted own-process error marker. Those tests do not run the ARM PhoneXR service, game input or poses.
+
+Tester: install this NEXA update; leave PhoneXR and Granny installed; stop controls and close Granny; Verify runtime; wait for the result (or timeout + a few seconds for logs); Copy result and share it for diagnosis. Service/package paths in the report identify the runtime installation only.

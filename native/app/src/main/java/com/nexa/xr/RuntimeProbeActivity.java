@@ -10,7 +10,7 @@ import java.util.concurrent.*;
 
 /** Runs in a separate process to isolate loader initialization and runtime failures. */
 public final class RuntimeProbeActivity extends Activity implements SensorEventListener {
-    private TextView status,sensors;private SensorManager manager;private final ExecutorService worker=Executors.newSingleThreadExecutor();
+    private TextView status,sensors;private SensorManager manager;private final ExecutorService worker=Executors.newSingleThreadExecutor();private boolean started;private volatile boolean completed;
     private native static String probe(Activity activity);
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -21,9 +21,21 @@ public final class RuntimeProbeActivity extends Activity implements SensorEventL
         ScrollView scroll=new ScrollView(this);status=new TextView(this);status.setTextColor(Color.WHITE);status.setTextIsSelectable(true);status.setText("Conectando ao runtime OpenXR…");scroll.addView(status);box.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));setContentView(box);
         manager=(SensorManager)getSystemService(SENSOR_SERVICE);
         if(manager!=null){Sensor sensor=manager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);if(sensor==null)sensor=manager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);if(sensor!=null)manager.registerListener(this,sensor,SensorManager.SENSOR_DELAY_UI);else sensors.setText("Celular sem sensor de orientação disponível.");}
-        Handler handler=new Handler(Looper.getMainLooper());handler.postDelayed(()->{if(!isFinishing()&&status.getText().toString().equals("Conectando ao runtime OpenXR…"))status.setText("O runtime ainda não respondeu. Você pode voltar e copiar o diagnóstico.");},20000);
-        worker.execute(()->{String result;try{System.loadLibrary("nexa_runtime_probe");result=probe(this);}catch(Throwable e){result="Falha na verificação: "+e;}
-            RuntimeDiagnostics.write(this,"runtime-last.txt",result);final String text=result;
+    }
+    @Override protected void onResume(){super.onResume();if(started)return;started=true;
+        RuntimeDiagnostics.write(this,"runtime-logs.txt","O teste atual ainda não coletou os logs.");
+        Handler handler=new Handler(Looper.getMainLooper());handler.postDelayed(()->{if(!isFinishing()&&!isDestroyed()&&!completed){
+            status.setText("O runtime ainda não respondeu. Use COPIAR RESULTADO para enviar as etapas registradas.");
+            Thread logs=new Thread(()->RuntimeDiagnostics.write(this,"runtime-logs.txt",OwnProcessLogs.collect()),"nexa-timeout-logs");logs.setDaemon(true);logs.start();
+        }},20000);
+        worker.execute(()->{String prefix=RuntimeConnectionCheck.packageCheck(this,RuntimeConnectionCheck.PACKAGE);
+            RuntimeDiagnostics.write(this,"runtime-last.txt",prefix+"\nPróxima etapa: vincular serviço PhoneXR…\n");
+            prefix+=RuntimeConnectionCheck.bindCheck(this,RuntimeConnectionCheck.SERVICE,2500);
+            RuntimeDiagnostics.write(this,"runtime-last.txt",prefix+"\nPróxima etapa: criar instância OpenXR…\n");
+            String result;try{System.loadLibrary("nexa_runtime_probe");result=probe(this);}catch(Throwable e){result="Falha na verificação: "+e;}
+            String logs=OwnProcessLogs.collect();RuntimeDiagnostics.write(this,"runtime-logs.txt",logs);
+            result=prefix+"\n"+result;
+            RuntimeDiagnostics.write(this,"runtime-last.txt",result);completed=true;final String text=result+"\nLogs do processo serão incluídos em COPIAR RESULTADO.";
             runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())status.setText(text);});});
     }
     @Override public void onSensorChanged(SensorEvent event) {

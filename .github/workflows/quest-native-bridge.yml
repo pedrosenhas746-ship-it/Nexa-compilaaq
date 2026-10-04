@@ -93,7 +93,7 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: NEXA-Quest-Bridge-v4.2
+          name: NEXA-Quest-Bridge-v4.2.1
           path: out/*
           if-no-files-found: error
           retention-days: 30
@@ -112,7 +112,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        api: [29, 34, 35]
+        api: [29, 35, 36]
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -134,13 +134,15 @@ jobs:
             adb install $(find apks -name app-debug-androidTest.apk)
             adb shell appops set com.nexa.xr.debug SYSTEM_ALERT_WINDOW allow
             adb shell am instrument -w com.nexa.xr.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (6 tests)' device-test.log
+            grep -q 'OK (10 tests)' device-test.log
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.HomeActivity
             adb shell screencap -p /sdcard/nexa-home.png
             adb pull /sdcard/nexa-home.png nexa-home.png
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.RuntimeProbeActivity
-            for attempt in $(seq 1 30); do if adb shell run-as com.nexa.xr.debug cat files/runtime-last.txt > runtime-probe.txt 2>/dev/null; then break; fi; sleep 1; done
+            for attempt in $(seq 1 30); do adb shell run-as com.nexa.xr.debug cat files/runtime-last.txt > runtime-probe.txt 2>/dev/null || true; if grep -q 'Descobrir extensões do runtime' runtime-probe.txt; then break; fi; sleep 1; done
             grep -q 'Descobrir extensões do runtime' runtime-probe.txt
+            adb shell run-as com.nexa.xr.debug cat files/runtime-logs.txt > runtime-logs.txt
+            grep -q 'Logs apenas do processo do teste' runtime-logs.txt
             adb logcat -d -b crash > crash-log.txt
       - uses: actions/upload-artifact@v4
         if: always()
@@ -151,3 +153,4 @@ jobs:
             nexa-home.png
             crash-log.txt
             runtime-probe.txt
+            runtime-logs.txt
