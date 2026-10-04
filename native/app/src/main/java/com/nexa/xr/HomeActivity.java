@@ -25,7 +25,7 @@ public final class HomeActivity extends Activity {
         super.onCreate(state);
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(8,15,25));
         int pad=(int)(16*getResources().getDisplayMetrics().density);root.setPadding(pad,pad,pad,pad);
-        TextView title=new TextView(this);title.setText("NEXA Quest Bridge v4.2.1");title.setTextColor(Color.WHITE);title.setTextSize(24);root.addView(title);
+        TextView title=new TextView(this);title.setText("NEXA Quest Bridge v4.2.2");title.setTextColor(Color.WHITE);title.setTextSize(24);root.addView(title);
         button(root,"IMPORTAR APK",v->startActivity(new Intent(this,ImportActivity.class)));
         scan=button(root,"BUSCAR JOGOS INSTALADOS",v->scanApps());
         launch=button(root,"EXECUTAR SELECIONADO",v->launchSelected());launch.setEnabled(false);

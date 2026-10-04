@@ -24,6 +24,19 @@ public final class RuntimeConnectionCheck {
                 catch(Throwable e){text.append("Classe ").append(name).append(": ").append(e).append('\n');}
             }
         }catch(Exception e){text.append("Falha ao acessar pacote/classes: ").append(e).append('\n');}
+        try {
+            ApplicationInfo info=context.getPackageManager().getApplicationInfo(pkg,0);
+            ClassLoader loader=new dalvik.system.DexClassLoader(info.sourceDir,"",null,context.getApplicationContext().getClassLoader());
+            Class<?> client=loader.loadClass("org.freedesktop.monado.ipc.Client");
+            client.getConstructor(long.class);
+            if(client.getMethod("blockingConnect",Context.class,String.class).getReturnType()!=int.class)throw new NoSuchMethodException("blockingConnect must return int");
+            client.getMethod("markAsDiscardedByNative");
+            if(client.getField("failed").getType()!=boolean.class || !client.getField("monado").getType().getName().equals("org.freedesktop.monado.ipc.IMonado"))throw new NoSuchFieldException("JNI fields");
+            loader.loadClass("org.freedesktop.monado.auxiliary.ActivityLifecycleListener");
+            text.append("DexClassLoader do APK: classes e contrato JNI disponíveis\n");
+        }catch(Throwable e){text.append("DexClassLoader do APK: ").append(e).append('\n');}
+        try {text.append("Tamanho de página de memória: ").append(android.system.Os.sysconf(android.system.OsConstants._SC_PAGESIZE)).append(" bytes\n");}
+        catch(Exception e){text.append("Tamanho de página: ").append(e).append('\n');}
         text.append("Carregar classes aqui não confirma o carregamento feito pelo código nativo.\n");return text.toString();
     }
     /** Call on a worker thread so the main thread can dispatch service callbacks. Always unbind. */
@@ -41,7 +54,7 @@ public final class RuntimeConnectionCheck {
         try {
             ServiceInfo info=context.getPackageManager().getServiceInfo(component,0);
             report.append("Declarado: sim; exportado: ").append(info.exported).append("; habilitado: ").append(info.enabled).append('\n');
-            int flags=Context.BIND_AUTO_CREATE|Context.BIND_IMPORTANT|Context.BIND_DEBUG_UNBIND;
+            int flags=Context.BIND_AUTO_CREATE|Context.BIND_IMPORTANT|Context.BIND_ABOVE_CLIENT;
             if(Build.VERSION.SDK_INT>=30)flags|=Context.BIND_INCLUDE_CAPABILITIES;
             bound=context.bindService(new Intent("org.freedesktop.monado.ipc.CONNECT").setComponent(component),connection,flags);
             if(!bound)report.append("Vincular serviço: recusado/não encontrado\n");

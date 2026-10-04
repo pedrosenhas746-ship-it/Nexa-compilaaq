@@ -12,7 +12,7 @@ public final class RuntimeDiagnostics {
     }
     public static String collect(Context context,String status) {
         UniversalRuntimeManager manager=new UniversalRuntimeManager(context);
-        StringBuilder report=new StringBuilder("NEXA 23.4.2.1 diagnóstico\nDevice: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
+        StringBuilder report=new StringBuilder("NEXA 23.4.2.2 IPC\nDevice: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL)
             .append("\nAndroid: ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT)
             .append("\nABIs: ").append(Arrays.toString(Build.SUPPORTED_ABIS)).append("\n").append(manager.getDeviceCaps().summary())
             .append("\n").append(manager.runtimeSummary()).append("\nStatus: ").append(status);

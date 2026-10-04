@@ -59,7 +59,15 @@ jobs:
           cp quest-compat/android/legacy-driver/build/outputs/apk/debug/legacy-driver-debug.apk native/app/src/main/assets/runtime/vrapi-driver.apk
       - name: Build NEXA launcher
         working-directory: native
-        run: gradle --no-daemon --stacktrace :app:assembleDebug :app:assembleAndroidTest
+        run: gradle --no-daemon --stacktrace :app:assembleDebug :app:assembleAndroidTest :runtime-ipc:assembleDebug :runtime-contract:assembleDebug
+      - name: Compile repaired PhoneXR client DEX (no runtime binaries uploaded)
+        run: |
+          mkdir -p out/phonexr-ipc-repair
+          unzip -p native/runtime-ipc/build/outputs/aar/runtime-ipc-debug.aar classes.jar > /tmp/phonexr-client.jar
+          unzip -p native/runtime-contract/build/outputs/aar/runtime-contract-debug.aar classes.jar > /tmp/phonexr-contract.jar
+          "$ANDROID_HOME/build-tools/35.0.0/d8" --min-api 26 --lib "$ANDROID_HOME/platforms/android-35/android.jar" --classpath /tmp/phonexr-contract.jar --output out/phonexr-ipc-repair /tmp/phonexr-client.jar
+          jar tf /tmp/phonexr-client.jar | tee out/phonexr-ipc-repair/class-list.txt
+          ! grep -q 'auxiliary/\|IMonado' out/phonexr-ipc-repair/class-list.txt
       - name: Package verified native libraries
         run: python3 quest-compat/tools/package-native-kit.py
       - name: Verify APK adaptation and signing on a synthetic fixture
@@ -93,7 +101,7 @@ jobs:
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: NEXA-Quest-Bridge-v4.2.1
+          name: NEXA-Quest-Bridge-v4.2.2
           path: out/*
           if-no-files-found: error
           retention-days: 30
@@ -134,7 +142,7 @@ jobs:
             adb install $(find apks -name app-debug-androidTest.apk)
             adb shell appops set com.nexa.xr.debug SYSTEM_ALERT_WINDOW allow
             adb shell am instrument -w com.nexa.xr.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (10 tests)' device-test.log
+            grep -q 'OK (20 tests)' device-test.log
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.HomeActivity
             adb shell screencap -p /sdcard/nexa-home.png
             adb pull /sdcard/nexa-home.png nexa-home.png

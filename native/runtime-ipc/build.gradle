@@ -1,0 +1,11 @@
+plugins { id 'com.android.library' }
+android {
+    namespace 'com.nexa.phonexr.ipc'
+    compileSdk 35
+    defaultConfig { minSdk 26 }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies {
+    compileOnly project(':runtime-contract')
+    compileOnly 'androidx.annotation:annotation:1.8.2'
+}
