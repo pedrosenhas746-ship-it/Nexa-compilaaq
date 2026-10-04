@@ -100,6 +100,9 @@ public class Client implements ServiceConnection {
             shutdown(true, interrupted ? "binding interrupted" : "binding failed or timed out");
             return -1;
         }
+        // The native compositor may need this surface while its server is still starting.
+        // Preserve the original ordering: publish the surface before the connect RPC can wait.
+        startSurfaceWorker(caller, service);
         ParcelFileDescriptor ours = null, theirs = null;
         try {
             ParcelFileDescriptor[] pair = ParcelFileDescriptor.createSocketPair();
@@ -111,7 +114,6 @@ public class Client implements ServiceConnection {
                 fd = ours;
                 ours = null; // Ownership transferred to this Client.
                 int result = fd.getFd();
-                startSurfaceWorker(caller, service);
                 Log.i(TAG, "NEXA IPC repair: connected socket fd " + result);
                 return result;
             }
