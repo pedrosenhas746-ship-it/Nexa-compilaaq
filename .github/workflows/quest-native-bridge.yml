@@ -33,7 +33,8 @@ jobs:
           curl --fail --location --retry 3 -o /tmp/lz4-java.jar https://repo.maven.apache.org/maven2/org/lz4/lz4-java/1.8.0/lz4-java-1.8.0.jar
           echo 'd74a3334fb35195009b338a951f918203d6bbca3d1d359033dc33edd1cadc9ef  /tmp/lz4-java.jar' | sha256sum -c -
           mkdir -p /tmp/compat-tests
-          javac -cp /tmp/lz4-java.jar -d /tmp/compat-tests native/app/src/main/java/com/nexa/xr/importer/ElfSymbols.java native/app/src/main/java/com/nexa/xr/importer/UnityOpenXrProfiles.java quest-compat/tests/java/ElfAuditTest.java quest-compat/tests/java/UnityProfilesTest.java
+          javac -cp /tmp/lz4-java.jar -d /tmp/compat-tests native/app/src/main/java/com/nexa/xr/importer/ElfSymbols.java native/app/src/main/java/com/nexa/xr/importer/UnityOpenXrProfiles.java quest-compat/tests/java/ElfAuditTest.java quest-compat/tests/java/UnityProfilesTest.java native/app/src/main/java/com/nexa/xr/input/ControllerPacket.java quest-compat/tests/java/ControllerPacketTest.java
+          java -cp /tmp/compat-tests:/tmp/lz4-java.jar ControllerPacketTest
           java -cp /tmp/compat-tests:/tmp/lz4-java.jar ElfAuditTest
           java -cp /tmp/compat-tests:/tmp/lz4-java.jar com.nexa.xr.importer.UnityProfilesTest
       - name: Build own VrApi library and driver
@@ -131,16 +132,14 @@ jobs:
           script: |
             adb install $(find apks -name app-debug.apk)
             adb install $(find apks -name app-debug-androidTest.apk)
+            adb shell appops set com.nexa.xr.debug SYSTEM_ALERT_WINDOW allow
             adb shell am instrument -w com.nexa.xr.debug.test/androidx.test.runner.AndroidJUnitRunner | tee device-test.log
-            grep -q 'OK (5 tests)' device-test.log
+            grep -q 'OK (6 tests)' device-test.log
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.HomeActivity
             adb shell screencap -p /sdcard/nexa-home.png
             adb pull /sdcard/nexa-home.png nexa-home.png
             adb shell am start -W -n com.nexa.xr.debug/com.nexa.xr.RuntimeProbeActivity
-            for attempt in $(seq 1 30); do
-              if adb shell run-as com.nexa.xr.debug cat files/runtime-last.txt > runtime-probe.txt 2>/dev/null; then break; fi
-              sleep 1
-            done
+            for attempt in $(seq 1 30); do if adb shell run-as com.nexa.xr.debug cat files/runtime-last.txt > runtime-probe.txt 2>/dev/null; then break; fi; sleep 1; done
             grep -q 'Descobrir extensões do runtime' runtime-probe.txt
             adb logcat -d -b crash > crash-log.txt
       - uses: actions/upload-artifact@v4

@@ -31,6 +31,7 @@ public final class HomeActivity extends Activity {
         launch=button(root,"EXECUTAR SELECIONADO",v->launchSelected());launch.setEnabled(false);
         button(root,"CONFIGURAR RUNTIME",v->startActivity(new Intent(this,RuntimeSetupActivity.class)));
         button(root,"VERIFICAR RUNTIME",v->{UniversalRuntimeManager runtime=new UniversalRuntimeManager(this);if(!runtime.launchRuntimeProbe())status.setText(runtime.lastError());});
+        button(root,"CONTROLES NA TELA",v->controllers());
         button(root,"MENU VR",v->startActivity(new Intent(this,MainActivity.class)));
         button(root,"COPIAR DIAGNÓSTICO",v->copyDiagnostic());
         status=new TextView(this);status.setTextColor(Color.WHITE);status.setTextSize(15);status.setTextIsSelectable(true);status.setPadding(0,pad/2,0,pad/2);root.addView(status);
@@ -63,6 +64,16 @@ public final class HomeActivity extends Activity {
         }catch(Exception error){showError("Não foi possível abrir o jogo",error);}
     }
     private void showError(String message,Exception error){android.util.Log.e("NEXA",message,error);runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())status.setText(message+": "+error);});}
+    private void controllers() {
+        if(com.nexa.xr.input.ControllerOverlayService.running){stopService(new Intent(this,com.nexa.xr.input.ControllerOverlayService.class));status.setText("Controles parados.");return;}
+        if(!android.provider.Settings.canDrawOverlays(this)){startActivityForResult(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,android.net.Uri.parse("package:"+getPackageName())),92);return;}
+        startControllers();
+    }
+    private void startControllers() {
+        try {startForegroundService(new Intent(this,com.nexa.xr.input.ControllerOverlayService.class));status.setText("Controles virtuais iniciados para teste no PhoneXR. Arraste para apontar, use os analógicos e segure os botões. Recebimento no jogo ainda precisa de teste.");}
+        catch(Exception e){showError("Não foi possível iniciar os controles",e);}
+    }
+    @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);if(request==92){if(android.provider.Settings.canDrawOverlays(this))startControllers();else status.setText("Permita aparecer sobre outros apps para usar os controles virtuais.");}}
     private void copyDiagnostic(){
         String report=RuntimeDiagnostics.collect(this,status.getText().toString());
         ((ClipboardManager)getSystemService(CLIPBOARD_SERVICE)).setPrimaryClip(ClipData.newPlainText("NEXA diagnóstico",report));Toast.makeText(this,"Diagnóstico copiado",Toast.LENGTH_SHORT).show();

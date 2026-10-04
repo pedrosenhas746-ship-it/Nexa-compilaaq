@@ -16,7 +16,7 @@ public final class RuntimeDiagnostics {
             .append("\nAndroid: ").append(Build.VERSION.RELEASE).append(" / API ").append(Build.VERSION.SDK_INT)
             .append("\nABIs: ").append(Arrays.toString(Build.SUPPORTED_ABIS)).append("\n").append(manager.getDeviceCaps().summary())
             .append("\n").append(manager.runtimeSummary()).append("\nStatus: ").append(status);
-        for(String name:new String[]{"last-import.txt","runtime-last.txt","last-crash.txt"}) {
+        for(String name:new String[]{"last-import.txt","controller-last.txt","runtime-last.txt","last-crash.txt"}) {
             File file=new File(context.getFilesDir(),name);if(!file.isFile())continue;
             try(InputStream in=new FileInputStream(file)){report.append("\n\n").append(name).append("\n").append(new String(com.nexa.xr.importer.ApkRewriter.readBounded(in,256*1024),StandardCharsets.UTF_8));}
             catch(IOException e){report.append("\nErro ao ler diagnóstico: ").append(e);}
